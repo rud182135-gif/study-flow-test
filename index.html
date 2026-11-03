@@ -33,6 +33,18 @@ h1{font-size:21px;letter-spacing:1.4px;margin:0}.sub{font-size:12px;color:var(--
 
 .panel-tools{display:flex;gap:5px;align-items:center}.weekpick{display:flex;gap:6px;flex-wrap:wrap}.weekpick label{border:1px solid var(--line);border-radius:8px;padding:7px 9px;font-size:11px;display:flex;gap:4px;align-items:center}.weekpick input{width:auto!important;margin:0}.row-actions{display:flex;gap:4px;flex-shrink:0}.tiny{border:1px solid var(--line);background:#fff;border-radius:7px;padding:5px 7px;font-size:10px}.goalrow{border-left:4px solid var(--goal-color,#7183b5);padding-left:9px}.goalbar>span{background:var(--goal-color,#7183b5)}.done-date{color:#18794e}.muted-date{color:#888}.panel h2{line-height:1.4}.savedrow .desc{white-space:normal}
 #duration{width:100%;min-width:0;box-sizing:border-box}
+
+#bookCount{cursor:pointer}
+.stats-detail{border-top:1px solid var(--line);margin-top:12px;padding-top:12px}
+.stats-monthnav{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;font-size:12px}
+.stats-chart{width:148px;height:148px;border-radius:50%;margin:10px auto 14px;position:relative}
+.stats-chart:after{content:'';position:absolute;inset:25px;border-radius:50%;background:var(--paper,#fff)}
+.stats-legend{display:grid;grid-template-columns:1fr auto;gap:7px;font-size:12px}
+.stats-legend .subject{display:flex;align-items:center;gap:7px}
+.stats-legend i{width:9px;height:9px;border-radius:50%;display:inline-block}
+.goal-edit-actions{display:flex;gap:4px;flex-shrink:0}
+.goal-edit-actions button{border:1px solid var(--line);background:white;border-radius:7px;padding:5px 7px;font-size:10px}
+
 </style>
 </head>
 <body>
@@ -42,12 +54,12 @@ h1{font-size:21px;letter-spacing:1.4px;margin:0}.sub{font-size:12px;color:var(--
 <div class="toolbar"><div class="monthnav"><button class="navbtn" id="prev">‹</button><strong id="monthTitle"></strong><button class="navbtn" id="next">›</button></div><button class="btn" id="todayBtn">오늘</button></div>
 <div class="layout"><section class="calendar"><div class="weekdays"><div class="weekday">일</div><div class="weekday">월</div><div class="weekday">화</div><div class="weekday">수</div><div class="weekday">목</div><div class="weekday">금</div><div class="weekday">토</div></div><div class="days" id="days"></div></section>
 <aside class="side">
-<div class="panel" id="statsPanel"><h2>이번 달 공부 현황</h2><div class="stat"><span>공부한 날짜</span><b id="taskCount">0일</b></div><div class="stat"><span>완료 일정</span><b id="doneCount">0개</b></div><div class="stat"><span>공부 문제집</span><b id="bookCount">0권</b></div><div id="monthDetails" class="hint" style="margin-top:10px"></div></div>
-<div class="panel" id="goalPanel"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><h2 style="margin:0">회독 목표</h2><div class="panel-tools"><button class="btn small" id="goalMore">더보기</button><button class="btn small" id="addGoalBtn">＋ 목표 추가</button></div></div><div id="goalList" style="margin-top:8px"></div></div>
+<div class="panel" id="statsPanel"><h2>이번 달 공부 현황</h2><div class="stat"><span>공부한 날짜</span><b id="taskCount">0일</b></div><div class="stat"><span>완료 일정</span><b id="doneCount">0개</b></div><div class="stat"><span>공부 문제집</span><b id="bookCount" role="button" tabindex="0" title="월별 과목 공부 비중 보기" style="cursor:pointer;text-decoration:underline;text-underline-offset:3px">0권</b></div><div id="monthDetails" class="hint" style="margin-top:10px"></div></div>
+<div class="panel" id="goalPanel"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><h2 style="margin:0">회독 목표</h2><div class="panel-tools"><button class="btn small" id="goalEditBtn">편집</button><button class="btn small" id="goalMore">더보기</button><button class="btn small" id="addGoalBtn" style="display:none">＋ 목표 추가</button></div></div><div id="goalList" style="margin-top:8px"></div></div>
 <div class="panel" id="bookPanel"><h2>문제집 목록</h2><div id="bookList"></div><div class="hint" style="margin-top:10px">일정에 입력한 문제집은 자동 저장돼요. 이미 등록한 일정에는 영향을 주지 않아요.</div></div>
 <div class="panel" id="savedPanel"><div style="display:flex;justify-content:space-between;align-items:center"><h2 style="margin:0">내 일정 보관함</h2><div class="panel-tools"><button class="btn small" id="savedEditBtn">편집</button><button class="btn small" id="savedMore">더보기</button></div></div><div id="savedList"></div><div class="hint" style="margin-top:8px">다시 등록을 누르면 오늘부터 같은 과목·문제집·범위로 새 일정이 만들어져요.</div></div>
+
 </aside></div></div>
-<div class="modalback" id="helpBack"><div class="modal"><h2>STUDY FLOW 사용 방법</h2><div class="hint" style="font-size:13px;line-height:1.9">• 빈 날짜를 누르면 해당 날짜로 새 일정을 추가해요.<br>• 일정 막대를 누르면 일정을 수정할 수 있어요.<br>• 일정 막대를 다른 날짜로 끌면 이동하고, 뒤 일정은 겹치지 않게 자동으로 밀려요.<br>• 막대 오른쪽 손잡이로 일정 기간을 조절할 수 있어요.<br>• 날짜를 누른 뒤 해당 날짜 일정의 하루 제외를 선택할 수 있어요.<br>• 일요일은 휴식일이며 공부일 수에서 제외돼요.<br>• 설정에서는 배경색, 패널 표시 여부와 순서를 바꿀 수 있어요.</div><div class="modalfoot"><span></span><div class="rightbuttons"><button class="btn primary" id="helpClose">닫기</button></div></div></div></div>
 <div class="modalback" id="modalback"><div class="modal"><h2 id="modalTitle">일정 추가</h2>
 <div class="formgrid">
 <div class="field"><label>과목</label><select id="subject"><option>국어</option><option>영어</option><option>행정법</option><option>행정학</option><option>기타</option></select></div>
@@ -256,7 +268,74 @@ load();applyPanelOrder();render();
 </script>
 
 <script>
-// Help guide opens from the header button beside Settings.
-(function(){const back=document.getElementById('helpBack');const open=document.getElementById('helpBtn');const close=document.getElementById('helpClose');if(!back||!open||!close)return;open.addEventListener('click',()=>back.classList.add('show'));close.addEventListener('click',()=>back.classList.remove('show'));back.addEventListener('click',e=>{if(e.target===back)back.classList.remove('show')});})();
+/* STUDY FLOW refinements: monthly subject share, goal edit mode, help modal */
+(function(){
+ const $=id=>document.getElementById(id);
+ const subjectColors={국어:'#e58d89',영어:'#e8ad62',행정법:'#829ed0',행정학:'#d18ab8',기타:'#aaa'};
+ let goalEditing=false,statsOpen=false;
+ const help=document.createElement('div');
+ help.className='modalback';help.id='helpBack';
+ help.innerHTML='<div class="modal"><h2>STUDY FLOW 사용 방법</h2><div class="hint" style="font-size:13px;line-height:1.9">• 빈 날짜를 누르면 해당 날짜로 새 일정을 추가해요.<br>• 일정 막대를 누르면 일정을 수정할 수 있어요.<br>• 일정 막대를 다른 날짜로 끌면 이동하고, 뒤 일정은 겹치지 않게 자동 조정돼요.<br>• 막대 오른쪽 손잡이로 일정 기간을 조절할 수 있어요.<br>• 날짜를 누르면 해당 날짜 일정의 완료 처리 또는 하루 제외를 할 수 있어요.<br>• 일요일 등 제외 요일은 일정 설정에서 지정할 수 있어요.<br>• 백업 버튼으로 데이터를 저장하고, 복원 버튼으로 불러올 수 있어요.</div><div class="modalfoot"><span></span><div class="rightbuttons"><button class="btn primary" id="helpClose">확인</button></div></div></div>';
+ document.body.appendChild(help);
+ $('helpBtn').onclick=()=>help.classList.add('show');
+ $('helpClose').onclick=()=>help.classList.remove('show');
+ help.addEventListener('click',e=>{if(e.target===help)help.classList.remove('show')});
+
+ // Monthly share is based on distinct active study dates per subject.
+ const oldRenderStats=renderStats;
+ renderStats=function(){
+   oldRenderStats();
+   const base=new Date(view.getFullYear(),view.getMonth()+statsMonthOffset,1);
+   const month=iso(base).slice(0,7),start=month+'-01',end=iso(new Date(base.getFullYear(),base.getMonth()+1,0));
+   const bySubject={};
+   data.tasks.forEach(t=>{
+     let d=t.start>start?t.start:start, last=t.end<end?t.end:end;
+     while(d<=last){
+       if(isActive(t,d)){(bySubject[t.subject]||(bySubject[t.subject]=new Set())).add(d)}
+       d=addDays(d,1);
+     }
+   });
+   const rows=Object.entries(bySubject).map(([subject,days])=>({subject,count:days.size})).sort((a,b)=>b.count-a.count);
+   const total=rows.reduce((n,x)=>n+x.count,0);
+   const colors=rows.map(x=>subjectColors[x.subject]||subjectColors.기타);
+   let cursor=0,stops=rows.map((x,i)=>{let pct=total?x.count/total*100:0,a=cursor;cursor+=pct;return `${colors[i]} ${a}% ${cursor}%`});
+   let detail=$('monthlySubjectDetail');
+   if(!detail){detail=document.createElement('div');detail.id='monthlySubjectDetail';detail.className='stats-detail';$('monthDetails').after(detail)}
+   detail.style.display=statsOpen?'block':'none';
+   const title=base.getFullYear()+'년 '+(base.getMonth()+1)+'월 과목별 공부 비중';
+   detail.innerHTML=`<div class="stats-monthnav"><button class="tiny" id="subjectMonthPrev">‹ 이전 달</button><b>${title}</b><button class="tiny" id="subjectMonthNext">다음 달 ›</button></div>`+
+    (total?`<div class="stats-chart" style="background:conic-gradient(${stops.join(',')})"></div><div class="stats-legend">${rows.map((x,i)=>`<span class="subject"><i style="background:${colors[i]}"></i>${esc(x.subject)} · ${x.count}일</span><b>${Math.round(x.count/total*100)}%</b>`).join('')}</div><p class="hint" style="margin-top:10px">과목별로 공부한 날짜를 기준으로 계산해요. 같은 과목의 여러 문제집을 같은 날 공부해도 하루로 계산해요.</p>`:'<div class="empty">선택한 달에 공부 기록이 없어요.</div>');
+   $('subjectMonthPrev').onclick=()=>{statsMonthOffset--;renderStats()};
+   $('subjectMonthNext').onclick=()=>{statsMonthOffset++;renderStats()};
+   $('bookCount').setAttribute('aria-expanded',String(statsOpen));
+ };
+ $('bookCount').onclick=()=>{statsOpen=!statsOpen;renderStats()};
+ $('bookCount').onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();statsOpen=!statsOpen;renderStats()}};
+
+ // Goal management controls are hidden until edit mode is enabled.
+ const oldRenderGoals=renderGoals;
+ renderGoals=function(){
+   let entries=Object.entries(data.goals||{}),shown=goalExpanded?entries:entries.slice(0,3);
+   $('goalList').innerHTML=shown.length?shown.map(([k,g])=>{
+     let total=Math.max(1,Number(g.units)||1),target=Math.max(1,Number(g.rounds)||1),r=Math.max(1,Number(g.currentRound)||1),u=Math.max(0,Math.min(total,Number(g.currentUnit)||0)),done=Math.min(target*total,Math.max(0,(r-1)*total+u)),pct=Math.round(done/(target*total)*100);
+     return `<div class="goalrow" style="--goal-color:${g.color||subjectColors[g.subject]||'#7183b5'}"><div class="goalhead"><b>${esc(g.subject)} · ${esc(g.book)}</b>${goalEditing?`<div class="goal-edit-actions"><button data-gup="${esc(k)}">↑</button><button data-gdown="${esc(k)}">↓</button><button data-gedit="${esc(k)}">수정</button><button data-gdel="${esc(k)}">삭제</button></div>`:''}</div><div class="goalbar"><span style="width:${pct}%"></span></div><div class="goalmeta">현재 ${r}회독 ${u}단원 · 목표 ${target}회독 · ${pct}%</div></div>`;
+   }).join(''):'<div class="empty">문제집별 회독 목표를 설정할 수 있어요.</div>';
+   $('goalList').querySelectorAll('[data-gedit]').forEach(b=>b.onclick=()=>openGoal(b.dataset.gedit));
+   $('goalList').querySelectorAll('[data-gup],[data-gdown]').forEach(b=>b.onclick=()=>{
+     let keys=Object.keys(data.goals),k=b.dataset.gup||b.dataset.gdown,i=keys.indexOf(k),j=i+(b.dataset.gup?-1:1);
+     if(j<0||j>=keys.length)return;[keys[i],keys[j]]=[keys[j],keys[i]];
+     data.goals=Object.fromEntries(keys.map(x=>[x,data.goals[x]]));save();renderGoals();
+   });
+   $('goalList').querySelectorAll('[data-gdel]').forEach(b=>b.onclick=()=>{
+     if(!confirm('이 회독 목표를 삭제할까요?'))return;
+     delete data.goals[b.dataset.gdel];save();render();showToast('회독 목표를 삭제했어요.');
+   });
+   $('goalMore').textContent=goalExpanded?'접기':'더보기';
+   $('goalEditBtn').textContent=goalEditing?'편집 완료':'편집';
+   $('addGoalBtn').style.display=goalEditing?'':'none';
+ };
+ $('goalEditBtn').onclick=()=>{goalEditing=!goalEditing;renderGoals()};
+})();
 </script>
+
 </body></html>

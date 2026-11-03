@@ -38,7 +38,7 @@ h1{font-size:21px;letter-spacing:1.4px;margin:0}.sub{font-size:12px;color:var(--
 <body>
 <div class="app">
 <header><div class="brand"><div class="logo">SF</div><div><h1>STUDY FLOW</h1><div class="sub">나만의 공부 일정 캘린더</div></div></div>
-<div class="actions"><button class="btn" id="undoBtn">↶ 뒤로</button><button class="btn" id="redoBtn">↷ 앞으로</button><button class="btn" id="settingsBtn">설정</button><button class="btn" id="backup">백업</button><button class="btn" id="restoreBtn">복원</button><input id="restoreFile" type="file" accept="application/json" hidden><button class="btn primary" id="addBtn">＋ 일정 추가</button></div></header>
+<div class="actions"><button class="btn" id="undoBtn">↶ 뒤로</button><button class="btn" id="redoBtn">↷ 앞으로</button><button class="btn" id="settingsBtn">설정</button><button class="btn" id="helpBtn">사용 방법</button><button class="btn" id="backup">백업</button><button class="btn" id="restoreBtn">복원</button><input id="restoreFile" type="file" accept="application/json" hidden><button class="btn primary" id="addBtn">＋ 일정 추가</button></div></header>
 <div class="toolbar"><div class="monthnav"><button class="navbtn" id="prev">‹</button><strong id="monthTitle"></strong><button class="navbtn" id="next">›</button></div><button class="btn" id="todayBtn">오늘</button></div>
 <div class="layout"><section class="calendar"><div class="weekdays"><div class="weekday">일</div><div class="weekday">월</div><div class="weekday">화</div><div class="weekday">수</div><div class="weekday">목</div><div class="weekday">금</div><div class="weekday">토</div></div><div class="days" id="days"></div></section>
 <aside class="side">
@@ -46,8 +46,8 @@ h1{font-size:21px;letter-spacing:1.4px;margin:0}.sub{font-size:12px;color:var(--
 <div class="panel" id="goalPanel"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><h2 style="margin:0">회독 목표</h2><div class="panel-tools"><button class="btn small" id="goalMore">더보기</button><button class="btn small" id="addGoalBtn">＋ 목표 추가</button></div></div><div id="goalList" style="margin-top:8px"></div></div>
 <div class="panel" id="bookPanel"><h2>문제집 목록</h2><div id="bookList"></div><div class="hint" style="margin-top:10px">일정에 입력한 문제집은 자동 저장돼요. 이미 등록한 일정에는 영향을 주지 않아요.</div></div>
 <div class="panel" id="savedPanel"><div style="display:flex;justify-content:space-between;align-items:center"><h2 style="margin:0">내 일정 보관함</h2><div class="panel-tools"><button class="btn small" id="savedEditBtn">편집</button><button class="btn small" id="savedMore">더보기</button></div></div><div id="savedList"></div><div class="hint" style="margin-top:8px">다시 등록을 누르면 오늘부터 같은 과목·문제집·범위로 새 일정이 만들어져요.</div></div>
-<div class="panel"><h2>사용 방법</h2><div class="hint">• 빈 날짜를 누르면 그 날짜로 새 일정을 추가해요.<br>• 일정 막대를 누르면 수정할 수 있어요.<br>• 일정 막대를 다른 날짜로 끌면 이동하고, 뒤 일정은 겹치지 않게 자동으로 밀려요.<br>• 막대 오른쪽 손잡이로 기간을 조절할 수 있어요.<br>• 날짜를 누른 뒤 해당 날짜 일정의 하루 제외를 선택할 수 있어요.<br>• 일요일은 휴식일이며 공부일 수에서 제외돼요.</div></div>
 </aside></div></div>
+<div class="modalback" id="helpBack"><div class="modal"><h2>STUDY FLOW 사용 방법</h2><div class="hint" style="font-size:13px;line-height:1.9">• 빈 날짜를 누르면 해당 날짜로 새 일정을 추가해요.<br>• 일정 막대를 누르면 일정을 수정할 수 있어요.<br>• 일정 막대를 다른 날짜로 끌면 이동하고, 뒤 일정은 겹치지 않게 자동으로 밀려요.<br>• 막대 오른쪽 손잡이로 일정 기간을 조절할 수 있어요.<br>• 날짜를 누른 뒤 해당 날짜 일정의 하루 제외를 선택할 수 있어요.<br>• 일요일은 휴식일이며 공부일 수에서 제외돼요.<br>• 설정에서는 배경색, 패널 표시 여부와 순서를 바꿀 수 있어요.</div><div class="modalfoot"><span></span><div class="rightbuttons"><button class="btn primary" id="helpClose">닫기</button></div></div></div></div>
 <div class="modalback" id="modalback"><div class="modal"><h2 id="modalTitle">일정 추가</h2>
 <div class="formgrid">
 <div class="field"><label>과목</label><select id="subject"><option>국어</option><option>영어</option><option>행정법</option><option>행정학</option><option>기타</option></select></div>
@@ -253,5 +253,10 @@ load();applyPanelOrder();render();
   const priorRender=window.render;if(typeof priorRender==='function'){window.render=function(){priorRender();applyColor();applyPanels();setupCollapsiblePanels()}}
   applyColor();applyPanels();setupCollapsiblePanels();
 })();
+</script>
+
+<script>
+// Help guide opens from the header button beside Settings.
+(function(){const back=document.getElementById('helpBack');const open=document.getElementById('helpBtn');const close=document.getElementById('helpClose');if(!back||!open||!close)return;open.addEventListener('click',()=>back.classList.add('show'));close.addEventListener('click',()=>back.classList.remove('show'));back.addEventListener('click',e=>{if(e.target===back)back.classList.remove('show')});})();
 </script>
 </body></html>

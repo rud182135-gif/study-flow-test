@@ -56,8 +56,8 @@ h1{font-size:21px;letter-spacing:1.4px;margin:0}.sub{font-size:12px;color:var(--
 <aside class="side">
 <div class="panel" id="statsPanel"><h2>이번 달 공부 현황</h2><div class="stat"><span>공부한 날짜</span><b id="taskCount">0일</b></div><div class="stat"><span>완료 일정</span><b id="doneCount">0개</b></div><div class="stat"><span>공부 문제집</span><b id="bookCount" role="button" tabindex="0" title="월별 과목 공부 비중 보기" style="cursor:pointer;text-decoration:underline;text-underline-offset:3px">0권</b></div><div id="monthDetails" class="hint" style="margin-top:10px"></div></div>
 <div class="panel" id="goalPanel"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><h2 style="margin:0">회독 목표</h2><div class="panel-tools"><button class="btn small" id="goalEditBtn">편집</button><button class="btn small" id="goalMore">더보기</button><button class="btn small" id="addGoalBtn" style="display:none">＋ 목표 추가</button></div></div><div id="goalList" style="margin-top:8px"></div></div>
-<div class="panel" id="bookPanel"><h2>문제집 목록</h2><div id="bookList"></div><div class="hint" style="margin-top:10px">일정에 입력한 문제집은 자동 저장돼요. 이미 등록한 일정에는 영향을 주지 않아요.</div></div>
-<div class="panel" id="savedPanel"><div style="display:flex;justify-content:space-between;align-items:center"><h2 style="margin:0">내 일정 보관함</h2><div class="panel-tools"><button class="btn small" id="savedEditBtn">편집</button><button class="btn small" id="savedMore">더보기</button></div></div><div id="savedList"></div><div class="hint" style="margin-top:8px">다시 등록을 누르면 오늘부터 같은 과목·문제집·범위로 새 일정이 만들어져요.</div></div>
+<div class="panel" id="bookPanel"><h2>문제집 목록</h2><div id="bookList"></div></div>
+<div class="panel" id="savedPanel"><div style="display:flex;justify-content:space-between;align-items:center"><h2 style="margin:0">내 일정 보관함</h2><div class="panel-tools"><button class="btn small" id="savedEditBtn">편집</button><button class="btn small" id="savedMore">더보기</button></div></div><div id="savedList"></div></div>
 
 </aside></div></div>
 <div class="modalback" id="modalback"><div class="modal"><h2 id="modalTitle">일정 추가</h2>
@@ -299,12 +299,30 @@ load();applyPanelOrder();render();
    const total=rows.reduce((n,x)=>n+x.count,0);
    const colors=rows.map(x=>subjectColors[x.subject]||subjectColors.기타);
    let cursor=0,stops=rows.map((x,i)=>{let pct=total?x.count/total*100:0,a=cursor;cursor+=pct;return `${colors[i]} ${a}% ${cursor}%`});
+   // Keep the default panel compact: leave only the month summary visible.
+   const monthSummary=$('monthDetails').querySelector('.hint');
+   $('monthDetails').innerHTML=monthSummary?monthSummary.outerHTML:'';
+   // Detailed book information belongs inside the expandable area opened by tapping the book count.
+   const bookGroups=new Map();
+   data.tasks.forEach(t=>{
+     let d=t.start>start?t.start:start, last=t.end<end?t.end:end;
+     while(d<=last){
+       if(isActive(t,d)){
+         const key=(t.subject||'기타')+'||'+(t.book||'문제집 미입력');
+         if(!bookGroups.has(key))bookGroups.set(key,{subject:t.subject||'기타',book:t.book||'문제집 미입력',days:new Set()});
+         bookGroups.get(key).days.add(d);
+       }
+       d=addDays(d,1);
+     }
+   });
+   const bookRows=[...bookGroups.values()].sort((a,b)=>b.days.size-a.days.size);
    let detail=$('monthlySubjectDetail');
    if(!detail){detail=document.createElement('div');detail.id='monthlySubjectDetail';detail.className='stats-detail';$('monthDetails').after(detail)}
    detail.style.display=statsOpen?'block':'none';
    const title=base.getFullYear()+'년 '+(base.getMonth()+1)+'월 과목별 공부 비중';
    detail.innerHTML=`<div class="stats-monthnav"><button class="tiny" id="subjectMonthPrev">‹ 이전 달</button><b>${title}</b><button class="tiny" id="subjectMonthNext">다음 달 ›</button></div>`+
-    (total?`<div class="stats-chart" style="background:conic-gradient(${stops.join(',')})"></div><div class="stats-legend">${rows.map((x,i)=>`<span class="subject"><i style="background:${colors[i]}"></i>${esc(x.subject)} · ${x.count}일</span><b>${Math.round(x.count/total*100)}%</b>`).join('')}</div><p class="hint" style="margin-top:10px">과목별로 공부한 날짜를 기준으로 계산해요. 같은 과목의 여러 문제집을 같은 날 공부해도 하루로 계산해요.</p>`:'<div class="empty">선택한 달에 공부 기록이 없어요.</div>');
+    (total?`<div class="stats-chart" style="background:conic-gradient(${stops.join(',')})"></div><div class="stats-legend">${rows.map((x,i)=>`<span class="subject"><i style="background:${colors[i]}"></i>${esc(x.subject)} · ${x.count}일</span><b>${Math.round(x.count/total*100)}%</b>`).join('')}</div><p class="hint" style="margin-top:10px">과목별로 공부한 날짜를 기준으로 계산해요. 같은 과목의 여러 문제집을 같은 날 공부해도 하루로 계산해요.</p>`:'<div class="empty">선택한 달에 공부 기록이 없어요.</div>')+
+    `<div class="book-detail-list"><h3>문제집별 공부 내역</h3>${bookRows.length?bookRows.map(g=>`<div class="monthbook"><b>${esc(g.subject)} · ${esc(g.book)}</b><small>${g.days.size}일 공부</small></div>`).join(''):'<div class="empty">이번 달 문제집 공부 기록이 없어요.</div>'}</div>`;
    $('subjectMonthPrev').onclick=()=>{statsMonthOffset--;renderStats()};
    $('subjectMonthNext').onclick=()=>{statsMonthOffset++;renderStats()};
    $('bookCount').setAttribute('aria-expanded',String(statsOpen));

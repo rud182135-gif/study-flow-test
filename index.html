@@ -511,4 +511,48 @@ function openDay(key){
 })();
 
 </script>
+
+<script>
+
+// Final cascade override: preserve completed dates and move only unfinished study days.
+cascadeAfter=function(anchor){
+  const later=data.tasks
+    .filter(t=>t.id!==anchor.id && t.start>=anchor.start)
+    .sort((a,b)=>a.start.localeCompare(b.start));
+  let cursor=anchor.end;
+  for(const t of later){
+    const ex=excluded(t);
+    const originalStart=t.start, originalEnd=t.end;
+    const completed=[...new Set((t.doneDates||[]).filter(d=>d>=originalStart&&d<=originalEnd))].sort();
+    // A task marked fully complete is always fixed in place.
+    if(t.done){ if(t.end>cursor)cursor=t.end; continue; }
+    const originalDays=[];
+    let day=originalStart;
+    while(day<=originalEnd){
+      if(isActive(t,day))originalDays.push(day);
+      day=addDays(day,1);
+    }
+    const unfinished=originalDays.filter(d=>!completed.includes(d));
+    if(!unfinished.length){if(t.end>cursor)cursor=t.end;continue;}
+    if(originalStart<=cursor){
+      let movedStart=addDays(cursor,1);
+      while(ex.includes(fromISO(movedStart).getDay()))movedStart=addDays(movedStart,1);
+      const movedEnd=workEnd(movedStart,unfinished.length,false,ex);
+      // Keep the original interval's completed dates visible; hide the gap and
+      // relocate only the unfinished days after the preceding schedule.
+      const fixedStart=completed.length?completed[0]:originalStart;
+      const gap=[];
+      let g= fixedStart;
+      while(g<movedStart){if(!completed.includes(g))gap.push(g);g=addDays(g,1)}
+      t.start=fixedStart;
+      t.end=movedEnd;
+      t.skipDates=[...new Set([...(t.skipDates||[]).filter(d=>d<fixedStart||d>movedEnd),...gap])];
+      cursor=movedEnd;
+    }else if(t.end>cursor){
+      cursor=t.end;
+    }
+  }
+};
+
+</script>
 </body></html>

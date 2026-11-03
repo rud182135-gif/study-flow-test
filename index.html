@@ -410,4 +410,105 @@ addSubjectButton('subject');
 addSubjectButton('goalSubject');
 
 </script>
+
+<script>
+
+// --- Schedule handling refinements ---
+function isDayDone(t,key){return !!t.done||(t.doneDates||[]).includes(key)}
+function cascadeAfter(anchor){
+  const later=data.tasks.filter(t=>t.id!==anchor.id&&t.start>=anchor.start).sort((a,b)=>a.start.localeCompare(b.start));
+  let cursor=anchor.end;
+  for(const t of later){
+    // Completed schedules are fixed and never cascaded.
+    if(t.done){if(t.end>cursor)cursor=t.end;continue}
+    const completed=(t.doneDates||[]).filter(d=>d>=t.start&&d<=t.end);
+    if(completed.length){
+      // Preserve completed dates as fixed exclusions; move only the unfinished portion.
+      const originalStart=t.start, originalEnd=t.end;
+      const unfinished=Math.max(0,(t.duration||workCount(originalStart,originalEnd,!!t.excludeSunday))-
+        new Set(completed).size);
+      if(!unfinished){if(t.end>cursor)cursor=t.end;continue}
+      const fixed=completed.sort();
+      let newStart=addDays(cursor,1);
+      while(t.excludeSunday&&fromISO(newStart).getDay()===0)newStart=addDays(newStart,1);
+      t.start=fixed[0]<newStart?fixed[0]:newStart;
+      t.skipDates=[...new Set([...(t.skipDates||[]),...fixed])];
+      let movedStart=newStart;
+      t.end=workEnd(movedStart,unfinished,!!t.excludeSunday);
+      if(t.end<fixed[fixed.length-1])t.end=fixed[fixed.length-1];
+      if(t.end>cursor)cursor=t.end;
+      continue;
+    }
+    if(t.start<=cursor){
+      const dur=Math.max(1,t.duration||workCount(t.start,t.end,!!t.excludeSunday));
+      let ns=addDays(cursor,1);
+      while(t.excludeSunday&&fromISO(ns).getDay()===0)ns=addDays(ns,1);
+      t.start=ns;t.end=workEnd(ns,dur,!!t.excludeSunday);
+      t.skipDates=(t.skipDates||[]).filter(x=>x<t.start||x>t.end);
+      cursor=t.end;
+    }else if(t.end>cursor)cursor=t.end;
+  }
+}
+function openDay(key){
+  selectedDay=key;const d=fromISO(key);
+  $('dayTitle').textContent=`${d.getFullYear()}년 ${d.getMonth()+1}월 ${d.getDate()}일${d.getDay()===0?' · 휴식일':''}`;
+  const tasks=data.tasks.filter(t=>isActive(t,key));
+  $('dayItems').innerHTML=tasks.length?tasks.map(t=>{
+    const done=isDayDone(t,key);
+    return `<div class="dateitem"><span><b>${esc(t.subject)} · ${esc(t.book||'')}</b><br>${esc(t.range||'범위 없음')}<br><small class="${done?'done-date':'muted-date'}">${done?'완료':'미완료'}</small></span><div class="row-actions"><button class="btn small" data-date-done="${esc(t.id)}">${done?'완료 취소':'이 날짜 완료'}</button><button class="btn small" data-cancel-date="${esc(t.id)}">이 날짜만 취소</button></div></div>`;
+  }).join(''):'<div class="empty">이 날짜에 등록된 일정이 없어요.</div>';
+  $('dayItems').querySelectorAll('[data-cancel-date]').forEach(b=>b.onclick=()=>{
+    const t=data.tasks.find(x=>x.id===b.dataset.cancelDate);if(!t)return;
+    if(!confirm('이 날짜의 일정만 취소할까요? 다른 날짜 일정은 그대로 유지돼요.'))return;
+    t.skipDates=[...new Set([...(t.skipDates||[]),key])];
+    t.duration=Math.max(0,(t.duration||workCount(t.start,t.end,!!t.excludeSunday))-1);
+    save();openDay(key);render();showToast('선택한 날짜만 취소했어요.');
+  });
+  $('dayItems').querySelectorAll('[data-date-done]').forEach(b=>b.onclick=()=>{
+    const t=data.tasks.find(x=>x.id===b.dataset.dateDone);if(!t)return;
+    t.doneDates=t.doneDates||[];
+    if(t.doneDates.includes(key))t.doneDates=t.doneDates.filter(x=>x!==key);else t.doneDates.push(key);
+    save();openDay(key);render();
+  });
+  const excludeBtn=document.createElement('button');
+  excludeBtn.className='btn small';excludeBtn.textContent='＋ 이 날짜를 일정 제외일로 설정';
+  excludeBtn.onclick=()=>{
+    const candidates=data.tasks.filter(t=>t.start<=key&&t.end>=key&&!isActive(t,key));
+    if(!tasks.length){showToast('먼저 일정을 등록한 뒤 해당 일정에서 날짜를 제외할 수 있어요.');return}
+    const target=tasks[0];
+    if(!confirm(`${target.subject} 일정에서 ${key}을(를) 제외할까요?`))return;
+    target.skipDates=[...new Set([...(target.skipDates||[]),key])];
+    target.duration=Math.max(0,(target.duration||workCount(target.start,target.end,!!target.excludeSunday))-1);
+    save();openDay(key);render();showToast('해당 날짜를 제외했어요.');
+  };
+  $('dayItems').appendChild(excludeBtn);
+  $('dayBack').classList.add('show');
+}
+// Add explicit one-off dates to omit while creating/editing a schedule.
+(function(){
+  const field=document.createElement('div');field.className='field full';
+  field.innerHTML='<label>일정에서 제외할 날짜</label><div style="display:flex;gap:8px;align-items:center"><input id="oneOffExcludeDate" type="date" style="flex:1"><button type="button" class="btn small" id="addOneOffExclude">날짜 추가</button></div><div id="oneOffExcludeList" class="hint" style="margin-top:6px">선택한 날짜에는 이 일정이 배정되지 않아요.</div>';
+  $('excludeDaysPicker').parentElement.after(field);
+  let chosen=[];
+  function draw(){ $('oneOffExcludeList').innerHTML=chosen.length?chosen.sort().map(d=>`<span style="display:inline-flex;gap:5px;margin:3px;padding:4px 7px;background:#eee;border-radius:8px">${d}<button type="button" data-remove-exdate="${d}">×</button></span>`).join(''):'선택한 날짜 없음';field.querySelectorAll('[data-remove-exdate]').forEach(b=>b.onclick=()=>{chosen=chosen.filter(x=>x!==b.dataset.removeExdate);draw()})}
+  $('addOneOffExclude').onclick=()=>{const d=$('oneOffExcludeDate').value;if(!d)return showToast('제외할 날짜를 선택해 주세요.');if(!chosen.includes(d))chosen.push(d);$('oneOffExcludeDate').value='';draw()};
+  const oldOpenNew=openNew;
+  openNew=function(date){oldOpenNew(date);chosen=[];draw()};
+  const oldOpenEdit=openEdit;
+  openEdit=function(id){oldOpenEdit(id);const t=data.tasks.find(x=>x.id===id);chosen=[...(t?.skipDates||[])];draw()};
+  const oldSave=$('saveBtn').onclick;
+  $('saveBtn').onclick=function(){
+    const before=editing?data.tasks.find(t=>t.id===editing):null;
+    oldSave();
+    if(before){before.skipDates=[...new Set(chosen)];save();render()}
+    else{
+      const start=$('start').value;
+      const created=[...data.tasks].filter(t=>t.start===start).sort((a,b)=>b.start.localeCompare(a.start))[0];
+      if(created&&chosen.length){created.skipDates=[...new Set(chosen)];created.duration=Math.max(1,created.duration||1);save();render()}
+    }
+  };
+  draw();
+})();
+
+</script>
 </body></html>

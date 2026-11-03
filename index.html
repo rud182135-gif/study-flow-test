@@ -356,4 +356,58 @@ load();applyPanelOrder();render();
 })();
 </script>
 
+
+<script>
+
+// Month navigation: show the selected month in the panel heading, not tiny numbers.
+const renderStatsWithMonth=renderStats;
+renderStats=function(){
+  renderStatsWithMonth();
+  const d=new Date(view.getFullYear(),view.getMonth()+statsMonthOffset,1);
+  const h=$('statsPanel').querySelector('h2');
+  h.innerHTML=`<span>${d.getFullYear()}년 ${d.getMonth()+1}월 공부 현황</span><span style="float:right;display:flex;gap:5px"><button class="tiny" id="monthPrev" aria-label="이전 달">‹</button><button class="tiny" id="monthNext" aria-label="다음 달">›</button></span>`;
+  $('monthPrev').onclick=()=>{statsMonthOffset--;renderStats()};
+  $('monthNext').onclick=()=>{statsMonthOffset++;renderStats()};
+};
+
+// Allow the user to add custom subjects from either subject selector.
+data.customSubjects=Array.isArray(data.customSubjects)?data.customSubjects:[];
+function refreshSubjectOptions(){
+  const defaults=['국어','영어','행정법','행정학','기타'];
+  const used=[...new Set([...defaults,...data.customSubjects,...(data.tasks||[]).map(t=>t.subject),...Object.values(data.goals||{}).map(g=>g.subject)].filter(Boolean))];
+  ['subject','goalSubject'].forEach(id=>{
+    const el=$(id),value=el.value;
+    el.innerHTML=used.map(x=>`<option value="${esc(x)}">${esc(x)}</option>`).join('');
+    if(used.includes(value))el.value=value;
+  });
+}
+function addCustomSubject(){
+  const name=prompt('추가할 과목명을 입력해 주세요.');
+  if(name===null)return;
+  const subject=name.trim();
+  if(!subject){showToast('과목명을 입력해 주세요.');return}
+  if(subject.length>20){showToast('과목명은 20자 이내로 입력해 주세요.');return}
+  if(!data.customSubjects.includes(subject))data.customSubjects.push(subject);
+  if(!palette[subject])palette[subject]='#c9c9c9';
+  refreshSubjectOptions();save();
+  $('subject').value=subject;$('goalSubject').value=subject;
+  $('color').value=palette[subject];
+  if($('goalColor'))$('goalColor').value=palette[subject];
+  showToast('새 과목을 추가했어요.');
+}
+function addSubjectButton(selectId){
+  const select=$(selectId);
+  if(select.dataset.addSubjectReady)return;
+  select.dataset.addSubjectReady='1';
+  const b=document.createElement('button');
+  b.type='button';b.className='btn small';b.textContent='＋ 과목 추가';
+  b.style.marginTop='6px';
+  b.onclick=addCustomSubject;
+  select.parentElement.appendChild(b);
+}
+refreshSubjectOptions();
+addSubjectButton('subject');
+addSubjectButton('goalSubject');
+
+</script>
 </body></html>

@@ -555,4 +555,144 @@ cascadeAfter=function(anchor){
 };
 
 </script>
+
+<script>
+
+// Corrected date-level movement and cancellation behavior.
+function taskActiveDays(t){
+  const out=[];
+  let d=t.start;
+  while(d<=t.end){
+    if(isActive(t,d))out.push(d);
+    d=addDays(d,1);
+  }
+  return out;
+}
+function rebuildTaskDates(t, keepDays){
+  const days=[...new Set(keepDays)].sort();
+  if(!days.length)return;
+  const start=days[0],end=days[days.length-1],keep=new Set(days),skip=[];
+  let d=start;
+  while(d<=end){
+    if(!keep.has(d) && !excluded(t).includes(fromISO(d).getDay()))skip.push(d);
+    d=addDays(d,1);
+  }
+  t.start=start;
+  t.end=end;
+  t.duration=days.length;
+  t.skipDates=skip;
+  // Keep completion marks only on dates that remain part of this task.
+  t.doneDates=(t.doneDates||[]).filter(x=>keep.has(x));
+}
+cascadeAfter=function(anchor){
+  const occupied=new Set(taskActiveDays(anchor));
+  const later=data.tasks
+    .filter(t=>t.id!==anchor.id && t.start>=anchor.start)
+    .sort((a,b)=>a.start.localeCompare(b.start));
+  for(const t of later){
+    const active=taskActiveDays(t);
+    if(!active.length)continue;
+    const overlap=active.some(d=>occupied.has(d));
+    if(overlap){
+      const completed=active.filter(d=>(t.doneDates||[]).includes(d));
+      const unfinished=active.filter(d=>!(t.doneDates||[]).includes(d));
+      if(t.done || !unfinished.length){
+        active.forEach(d=>occupied.add(d));
+        continue;
+      }
+      let cursor=addDays([...occupied].sort().slice(-1)[0],1);
+      const moved=[];
+      while(moved.length<unfinished.length){
+        if(!excluded(t).includes(fromISO(cursor).getDay()) && !occupied.has(cursor) && !completed.includes(cursor)){
+          moved.push(cursor);
+        }
+        cursor=addDays(cursor,1);
+      }
+      const keep=[...completed,...moved].sort();
+      rebuildTaskDates(t,keep);
+      keep.forEach(d=>occupied.add(d));
+    }else{
+      active.forEach(d=>occupied.add(d));
+    }
+  }
+};
+
+// Replace drag behavior so completed dates never move with unfinished dates.
+endGesture=function(e){
+  window.removeEventListener('pointermove',moveGesture);
+  document.querySelectorAll('.day.drop').forEach(x=>x.classList.remove('drop'));
+  if(!gesture)return;
+  const g=gesture,t=data.tasks.find(x=>x.id===g.id);
+  if(g.active&&t&&g.target){
+    const active=taskActiveDays(t);
+    const completed=active.filter(d=>t.done===true||(t.doneDates||[]).includes(d));
+    const unfinished=active.filter(d=>!completed.includes(d));
+    if(!g.isGrip){
+      if(completed.includes(g.origin) || (t.done===true && active.length)){
+        showToast('완료한 날짜는 이동할 수 없어요. 미완료 날짜를 끌어 이동해 주세요.');
+      }else if(unfinished.length){
+        const offset=Math.round((fromISO(g.target)-fromISO(g.origin))/86400000);
+        let target=addDays(g.origin,offset);
+        while(excluded(t).includes(fromISO(target).getDay()) || completed.includes(target))target=addDays(target,1);
+        const moved=[];
+        let cursor=target;
+        while(moved.length<unfinished.length){
+          if(!excluded(t).includes(fromISO(cursor).getDay()) && !completed.includes(cursor))moved.push(cursor);
+          cursor=addDays(cursor,1);
+        }
+        rebuildTaskDates(t,[...completed,...moved]);
+        cascadeAfter(t);
+        save();render();showToast('완료일은 유지하고 미완료 일정만 이동했어요.');
+      }
+    }else{
+      // Resizing a task with completed dates must not erase or move those dates.
+      const requested=workCount(t.start,g.target,false,excluded(t));
+      if(requested>=completed.length+1){
+        const keep=[...completed];
+        let cursor=addDays(t.start,0);
+        while(keep.length<requested && cursor<=g.target){
+          if(!excluded(t).includes(fromISO(cursor).getDay())&&!keep.includes(cursor))keep.push(cursor);
+          cursor=addDays(cursor,1);
+        }
+        rebuildTaskDates(t,keep);
+        cascadeAfter(t);save();render();showToast('기간을 조정했어요. 완료 날짜는 유지했어요.');
+      }
+    }
+  }
+  gesture=null;
+};
+
+// A cancelled date is a true free day. Do not keep a stale range reservation.
+skipOneDay=function(id,key){
+  const t=data.tasks.find(x=>x.id===id);
+  if(!t||!isActive(t,key))return;
+  if(!confirm('선택한 날짜의 일정만 취소할까요? 다른 날짜의 일정은 그대로 유지돼요.'))return;
+  const keep=taskActiveDays(t).filter(d=>d!==key);
+  if(!keep.length){
+    data.tasks=data.tasks.filter(x=>x.id!==id);
+  }else{
+    rebuildTaskDates(t,keep);
+    t.doneDates=(t.doneDates||[]).filter(d=>d!==key);
+  }
+  save();
+  $('dayBack').classList.remove('show');
+  render();
+  showToast('선택한 날짜를 비웠어요. 해당 날짜에 새 일정을 등록할 수 있어요.');
+};
+
+// Keep the date-level cancellation button behavior in the day detail.
+if(typeof openDay==='function'){
+  const openDayBeforeDateFix=openDay;
+  openDay=function(key){
+    openDayBeforeDateFix(key);
+    $('dayItems').querySelectorAll('[data-cancel-date]').forEach(b=>{
+      b.onclick=()=>{
+        const id=b.dataset.cancelDate;
+        skipOneDay(id,key);
+      };
+    });
+  };
+}
+
+</script>
 </body></html>

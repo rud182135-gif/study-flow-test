@@ -241,6 +241,10 @@ load();applyPanelOrder();render();
     .sf-setting-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:8px 0;font-size:13px}
     .sf-color{width:56px;height:38px;border:1px solid var(--line);border-radius:8px;background:transparent;padding:2px}
     .sf-panel-list{display:flex;flex-direction:column;gap:7px}.sf-panel-item{display:flex;align-items:center;gap:10px;padding:10px;border:1px solid var(--line);border-radius:10px;background:var(--paper,#fff)}
+    .sf-drag-handle{border:0;background:#f1f0ed;color:#666;border-radius:7px;width:30px;height:30px;font-size:19px;line-height:1;touch-action:none;cursor:grab;flex-shrink:0}
+    .sf-dragging{opacity:.55}.sf-drag-over{outline:2px dashed var(--accent);outline-offset:2px}
+    .goal-drag-handle{border:0;background:#f1f0ed;color:#666;border-radius:7px;width:28px;height:27px;font-size:17px;touch-action:none;cursor:grab;flex-shrink:0}
+
     .sf-panel-name{flex:1;font-size:13px}.sf-order-buttons{display:flex;gap:4px}.sf-order-buttons button{border:1px solid var(--line);border-radius:7px;background:transparent;padding:5px 9px;color:inherit}
     .panel-heading{display:flex;align-items:center;justify-content:space-between;gap:8px;width:100%;margin-bottom:10px}
     .panel-heading h2{margin:0!important}.panel-collapse{flex-shrink:0;padding:5px 9px;font-size:11px;border:1px solid var(--line);border-radius:8px;background:transparent;color:inherit}
@@ -248,13 +252,54 @@ load();applyPanelOrder();render();
     @media(max-width:560px){.sf-settings{padding:15px}}
   `;
   document.head.appendChild(css);
+
+  function enableTouchDrag(container,rowSelector,handleSelector,onDrop){
+    let dragged=null, pointerId=null;
+    container.querySelectorAll(handleSelector).forEach(handle=>{
+      handle.style.touchAction='none';
+      handle.style.cursor='grab';
+      handle.onpointerdown=e=>{
+        const row=handle.closest(rowSelector);if(!row)return;
+        dragged=row;pointerId=e.pointerId;handle.setPointerCapture?.(pointerId);
+        row.classList.add('sf-dragging');e.preventDefault();
+      };
+      handle.onpointermove=e=>{
+        if(!dragged||e.pointerId!==pointerId)return;
+        const rows=[...container.querySelectorAll(rowSelector)].filter(x=>x!==dragged);
+        const target=rows.find(row=>{const r=row.getBoundingClientRect();return e.clientY>=r.top&&e.clientY<=r.bottom});
+        rows.forEach(x=>x.classList.remove('sf-drag-over'));
+        if(target){target.classList.add('sf-drag-over');const r=target.getBoundingClientRect();if(e.clientY>r.top+r.height/2)target.after(dragged);else target.before(dragged)}
+      };
+      const finish=e=>{
+        if(!dragged||e.pointerId!==pointerId)return;
+        const fromId=dragged.dataset.panelId||dragged.dataset.goalKey;
+        const rows=[...container.querySelectorAll(rowSelector)];
+        const toId=rows.find(x=>x===dragged)?.dataset.panelId||rows.find(x=>x===dragged)?.dataset.goalKey;
+        dragged.classList.remove('sf-dragging');rows.forEach(x=>x.classList.remove('sf-drag-over'));
+        // The DOM order is the final order. Restore it into persistent data.
+        if(fromId&&toId){
+          const before=dragged.previousElementSibling;
+          const after=dragged.nextElementSibling;
+          const targetId=before?.dataset.panelId||before?.dataset.goalKey||after?.dataset.panelId||after?.dataset.goalKey;
+          if(targetId)onDrop(fromId,targetId,before? 'after':'before');
+        }
+        dragged=null;pointerId=null;
+      };
+      handle.onpointerup=finish;handle.onpointercancel=finish;
+    });
+  }
+
+  window.enableTouchDrag=enableTouchDrag;
   function saveSettings(){if(typeof save==='function')save()}
   function applyColor(){const c=data.settings.pageColor||'#f6f4ef';document.documentElement.style.setProperty('--bg',c);const n=parseInt(c.slice(1),16),r=n>>16,g=(n>>8)&255,b=n&255,dark=(r*299+g*587+b*114)/1000<135;document.documentElement.style.setProperty('--paper',dark?'#2b2e36':'#fff');document.documentElement.style.setProperty('--ink',dark?'#f4f4f4':'#252525');document.documentElement.style.setProperty('--line',dark?'#454954':'#e9e6df');document.documentElement.style.setProperty('--muted',dark?'#b8bdc8':'#858585')}
   function applyPanels(){const side=document.querySelector('.side');if(!side)return;const ids=panelDefs.map(x=>x[0]);let order=(data.settings.panelOrder||[]).filter(x=>ids.includes(x));ids.forEach(x=>{if(!order.includes(x))order.push(x)});data.settings.panelOrder=order;order.forEach(id=>{const el=$(id);if(el)side.appendChild(el)});ids.forEach(id=>{const el=$(id);if(el)el.style.display=data.settings.panelVisibility[id]===false?'none':''})}
   const back=document.createElement('div');back.className='sf-settings-back';back.id='sfSettingsBack';
   back.innerHTML=`<div class="sf-settings" role="dialog" aria-modal="true" aria-label="설정"><div class="sf-settings-head"><h2>⚙ 설정</h2><button class="btn small" id="sfSettingsClose">닫기</button></div><section class="sf-setting-section"><h3>페이지 배경색</h3><div class="sf-setting-row"><span>배경색 선택</span><input class="sf-color" id="sfPageColor" type="color"></div><div class="hint">색상을 선택하면 즉시 적용되고 자동 저장돼요.</div></section><section class="sf-setting-section"><h3>패널 표시 및 위치</h3><div class="hint" style="margin-bottom:10px">각 패널 오른쪽의 위·아래 버튼으로 위치를 조절해요. 표시를 해제하면 패널이 숨겨지며 데이터는 유지돼요.</div><div class="sf-panel-list" id="sfPanelList"></div></section><div class="modalfoot"><button class="btn" id="sfSettingsReset">기본값으로 초기화</button><div class="rightbuttons"><button class="btn primary" id="sfSettingsDone">완료</button></div></div></div>`;
   document.body.appendChild(back);
-  function renderSettingsList(){const list=$('sfPanelList');let order=(data.settings.panelOrder||panelDefs.map(x=>x[0])).filter(id=>panelDefs.some(p=>p[0]===id));panelDefs.forEach(p=>{if(!order.includes(p[0]))order.push(p[0])});data.settings.panelOrder=order;list.innerHTML=order.map((id,i)=>{const label=panelDefs.find(p=>p[0]===id)[1],checked=data.settings.panelVisibility[id]!==false;return `<div class="sf-panel-item" data-panel-id="${id}"><span class="sf-panel-name">${label}</span><div class="sf-order-buttons"><button type="button" data-up="${id}" ${i===0?'disabled':''}>↑</button><button type="button" data-down="${id}" ${i===order.length-1?'disabled':''}>↓</button></div><label style="display:flex;align-items:center;gap:6px;font-size:11px"><input type="checkbox" data-panel-check="${id}" ${checked?'checked':''}> 표시</label></div>`}).join('');list.querySelectorAll('[data-panel-check]').forEach(ch=>ch.addEventListener('change',()=>{data.settings.panelVisibility[ch.dataset.panelCheck]=ch.checked;applyPanels();saveSettings()}));list.querySelectorAll('[data-up],[data-down]').forEach(btn=>btn.addEventListener('click',()=>{const id=btn.dataset.up||btn.dataset.down,from=data.settings.panelOrder.indexOf(id),to=from+(btn.dataset.up?-1:1);if(to<0||to>=data.settings.panelOrder.length)return;const a=data.settings.panelOrder;a.splice(to,0,a.splice(from,1)[0]);applyPanels();renderSettingsList();saveSettings()}))}
+  function renderSettingsList(){const list=$('sfPanelList');let order=(data.settings.panelOrder||panelDefs.map(x=>x[0])).filter(id=>panelDefs.some(p=>p[0]===id));panelDefs.forEach(p=>{if(!order.includes(p[0]))order.push(p[0])});data.settings.panelOrder=order;list.innerHTML=order.map((id,i)=>{const label=panelDefs.find(p=>p[0]===id)[1],checked=data.settings.panelVisibility[id]!==false;return `<div class="sf-panel-item" data-panel-id="${id}"><button type="button" class="sf-drag-handle" aria-label="패널 순서 드래그" title="길게 누른 뒤 끌어서 순서 변경">⠿</button><span class="sf-panel-name">${label}</span><label style="display:flex;align-items:center;gap:6px;font-size:11px"><input type="checkbox" data-panel-check="${id}" ${checked?'checked':''}> 표시</label></div>`}).join('');list.querySelectorAll('[data-panel-check]').forEach(ch=>ch.addEventListener('change',()=>{data.settings.panelVisibility[ch.dataset.panelCheck]=ch.checked;applyPanels();saveSettings()}));enableTouchDrag(list,'.sf-panel-item','.sf-drag-handle',()=>{
+      data.settings.panelOrder=[...list.querySelectorAll('.sf-panel-item')].map(x=>x.dataset.panelId);
+      applyPanels();renderSettingsList();saveSettings();
+    })}
   function openSettings(){$('sfPageColor').value=data.settings.pageColor||'#f6f4ef';renderSettingsList();back.classList.add('open')}
   function closeSettings(){back.classList.remove('open')}
   $('settingsBtn')?.addEventListener('click',e=>{e.preventDefault();openSettings()});$('sfSettingsClose').onclick=closeSettings;$('sfSettingsDone').onclick=closeSettings;back.addEventListener('click',e=>{if(e.target===back)closeSettings()});
@@ -336,9 +381,17 @@ load();applyPanelOrder();render();
    let entries=Object.entries(data.goals||{}),shown=goalExpanded?entries:entries.slice(0,3);
    $('goalList').innerHTML=shown.length?shown.map(([k,g])=>{
      let total=Math.max(1,Number(g.units)||1),target=Math.max(1,Number(g.rounds)||1),r=Math.max(1,Number(g.currentRound)||1),u=Math.max(0,Math.min(total,Number(g.currentUnit)||0)),done=Math.min(target*total,Math.max(0,(r-1)*total+u)),pct=Math.round(done/(target*total)*100);
-     return `<div class="goalrow" style="--goal-color:${g.color||subjectColors[g.subject]||'#7183b5'}"><div class="goalhead"><b>${esc(g.subject)} · ${esc(g.book)}</b>${goalEditing?`<div class="goal-edit-actions"><button data-gup="${esc(k)}">↑</button><button data-gdown="${esc(k)}">↓</button><button data-gedit="${esc(k)}">수정</button><button data-gdel="${esc(k)}">삭제</button></div>`:''}</div><div class="goalbar"><span style="width:${pct}%"></span></div><div class="goalmeta">현재 ${r}회독 ${u}단원 · 목표 ${target}회독 · ${pct}%</div></div>`;
+     return `<div class="goalrow" data-goal-key="${esc(k)}" style="--goal-color:${g.color||subjectColors[g.subject]||'#7183b5'}"><div class="goalhead"><b>${esc(g.subject)} · ${esc(g.book)}</b>${goalEditing?`<div class="goal-edit-actions"><button type="button" class="goal-drag-handle" title="길게 누른 뒤 끌어서 순서 변경">⠿</button><button data-gedit="${esc(k)}">수정</button><button data-gdel="${esc(k)}">삭제</button></div>`:''}</div><div class="goalbar"><span style="width:${pct}%"></span></div><div class="goalmeta">현재 ${r}회독 ${u}단원 · 목표 ${target}회독 · ${pct}%</div></div>`;
    }).join(''):'<div class="empty">문제집별 회독 목표를 설정할 수 있어요.</div>';
    $('goalList').querySelectorAll('[data-gedit]').forEach(b=>b.onclick=()=>openGoal(b.dataset.gedit));
+   if(goalEditing){
+     window.enableTouchDrag($('goalList'),'.goalrow','.goal-drag-handle',()=>{
+       const keys=[...$('goalList').querySelectorAll('.goalrow')].map(x=>x.dataset.goalKey);
+       const rest=Object.keys(data.goals).filter(k=>!keys.includes(k));
+       data.goals=Object.fromEntries([...keys,...rest].map(k=>[k,data.goals[k]]));
+       save();renderGoals();
+     });
+   }
    $('goalList').querySelectorAll('[data-gup],[data-gdown]').forEach(b=>b.onclick=()=>{
      let keys=Object.keys(data.goals),k=b.dataset.gup||b.dataset.gdown,i=keys.indexOf(k),j=i+(b.dataset.gup?-1:1);
      if(j<0||j>=keys.length)return;[keys[i],keys[j]]=[keys[j],keys[i]];

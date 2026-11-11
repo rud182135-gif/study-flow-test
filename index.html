@@ -55,9 +55,9 @@ h1{font-size:21px;letter-spacing:1.4px;margin:0}.sub{font-size:12px;color:var(--
 <div class="layout"><section class="calendar"><div class="weekdays"><div class="weekday">일</div><div class="weekday">월</div><div class="weekday">화</div><div class="weekday">수</div><div class="weekday">목</div><div class="weekday">금</div><div class="weekday">토</div></div><div class="days" id="days"></div></section>
 <aside class="side">
 <div class="panel" id="statsPanel"><h2>이번 달 공부 현황</h2><div class="stat"><span>공부한 날짜</span><b id="taskCount">0일</b></div><div class="stat"><span>완료 일정</span><b id="doneCount">0개</b></div><div class="stat"><span>공부 문제집</span><b id="bookCount" role="button" tabindex="0" title="월별 과목 공부 비중 보기" style="cursor:pointer;text-decoration:underline;text-underline-offset:3px">0권</b></div><div id="monthDetails" class="hint" style="margin-top:10px"></div></div>
-<div class="panel" id="goalPanel"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><h2 style="margin:0">회독 목표</h2><div class="panel-tools"><button class="btn small" id="goalMenuBtn" aria-label="회독 목표 메뉴">⋯</button><button class="btn small" id="goalMore">더보기</button><button class="btn small" id="goalEditBtn" style="display:none">편집</button><button class="btn small" id="addGoalBtn" style="display:none">＋ 목표 추가</button></div></div><div id="goalList" style="margin-top:8px"></div></div>
+<div class="panel" id="goalPanel"><div class="panel-heading"><h2>회독 목표</h2><button class="btn small" id="goalMenuBtn" aria-label="회독 목표 메뉴">⋯</button><button class="btn small legacy-panel-control" id="goalMore">더보기</button><button class="btn small legacy-panel-control" id="goalEditBtn">편집</button><button class="btn small panel-done-btn" id="goalDoneBtn" style="display:none">편집 완료</button><button class="btn small legacy-panel-control" id="addGoalBtn">＋ 목표 추가</button></div><div id="goalList" style="margin-top:8px"></div></div>
 <div class="panel" id="bookPanel"><div class="panel-heading"><h2>문제집 목록</h2><button class="btn small" id="bookMenuBtn" aria-label="문제집 메뉴">⋯</button></div><div id="bookList"></div></div>
-<div class="panel" id="savedPanel"><div style="display:flex;justify-content:space-between;align-items:center"><h2 style="margin:0">내 일정 보관함</h2><div class="panel-tools"><button class="btn small" id="savedMenuBtn" aria-label="보관함 메뉴">⋯</button><button class="btn small" id="savedMore">더보기</button><button class="btn small" id="savedEditBtn" style="display:none">편집</button></div></div><div id="savedList"></div></div>
+<div class="panel" id="savedPanel"><div class="panel-heading"><h2>내 일정 보관함</h2><button class="btn small" id="savedMenuBtn" aria-label="보관함 메뉴">⋯</button><button class="btn small legacy-panel-control" id="savedMore">더보기</button><button class="btn small legacy-panel-control" id="savedEditBtn">편집</button><button class="btn small panel-done-btn" id="savedDoneBtn" style="display:none">편집 완료</button></div><div id="savedList"></div></div>
 
 </aside></div></div>
 <div class="modalback" id="modalback"><div class="modal"><h2 id="modalTitle">일정 추가</h2>
@@ -72,7 +72,7 @@ h1{font-size:21px;letter-spacing:1.4px;margin:0}.sub{font-size:12px;color:var(--
 <div class="modalback" id="dayBack"><div class="modal"><h2 id="dayTitle">날짜 일정</h2><div id="dayItems" class="dateitems"></div><div class="modalfoot"><button class="btn" id="dayAdd">＋ 이 날짜에 일정 추가</button><div class="rightbuttons"><button class="btn" id="deleteDayBtn" style="color:#b42318;border-color:#efc7c4">이 날짜 전체 삭제</button><button class="btn" id="dayClose">닫기</button></div></div></div></div>
 <div class="modalback" id="goalBack"><div class="modal"><h2 id="goalModalTitle">회독 목표 설정</h2><div class="formgrid">
 <div class="field"><label>과목</label><select id="goalSubject"><option>국어</option><option>영어</option><option>행정법</option><option>행정학</option><option>기타</option></select></div>
-<div class="field"><label>문제집</label><input id="goalBook" placeholder="예: 행정법 기출"></div>
+<div class="field"><label>문제집</label><input id="goalBook" placeholder="예: 행정법 기출"><div id="goalChapterPicker" class="field full"><label>학습 단원 선택</label><div id="goalChapterOptions" class="chapter-options"><span class="hint">문제집을 선택하면 등록된 목차가 표시돼요.</span></div></div></div>
 <div class="field"><label>전체 단원 수</label><input id="goalUnits" type="number" min="1" value="6"></div><div class="field"><label>목표 회독 수</label><input id="goalRounds" type="number" min="1" value="5"></div>
 <div class="field"><label>현재 회독</label><input id="goalCurrentRound" type="number" min="1" value="1"></div><div class="field"><label>현재 회독의 단원</label><input id="goalCurrentUnit" type="text" inputmode="text" value="0단원" placeholder="예: 3단원, 행정행위, 15~20번"></div></div><div class="hint" style="margin-top:10px">예: 전체 6단원, 목표 5회독, 현재 2회독 6단원이면 2회독을 마친 상태로 계산해요. 다음은 3회독 1단원이에요.</div><div class="modalfoot"><button class="btn" id="deleteGoalBtn" style="display:none">목표 삭제</button><div class="rightbuttons"><button class="btn" id="cancelGoalBtn">취소</button><button class="btn primary" id="saveGoalBtn">저장</button></div></div></div></div>
 
@@ -221,7 +221,7 @@ skipOneDay=function(id,key){let t=data.tasks.find(x=>x.id===id);if(!t)return;if(
 cascadeAfter=function(anchor){let later=data.tasks.filter(t=>t.id!==anchor.id&&t.start>=anchor.start).sort((a,b)=>a.start.localeCompare(b.start));let cursor=anchor.end;for(let t of later){if(t.start<=cursor){let ex=excluded(t),dur=Math.max(1,t.duration||workCount(t.start,t.end,false,ex));t.start=addDays(cursor,1);while(ex.includes(fromISO(t.start).getDay()))t.start=addDays(t.start,1);t.end=workEnd(t.start,dur,false,ex);t.skipDates=(t.skipDates||[]).filter(x=>x<t.start||x>t.end);cursor=t.end}else if(t.end>cursor)cursor=t.end}};
 // Current schedule panel and grouped saved library.
 const side=document.querySelector('.side');
-const currentPanel=document.createElement('div');currentPanel.className='panel';currentPanel.id='currentPanel';currentPanel.innerHTML='<div style="display:flex;justify-content:space-between;align-items:center"><h2 style="margin:0">현재 적용 중인 일정</h2><div class="panel-tools"><button class="btn small" id="currentEditBtn">편집</button><button class="btn small" id="currentMore">더보기</button></div></div><div id="currentList" style="margin-top:8px"></div>';side.insertBefore(currentPanel,$('savedPanel'));
+const currentPanel=document.createElement('div');currentPanel.className='panel';currentPanel.id='currentPanel';currentPanel.innerHTML='<div class="panel-heading"><h2>현재 적용 중인 일정</h2><button class="btn small" id="currentMenuBtn" aria-label="현재 일정 메뉴">⋯</button><button class="btn small legacy-panel-control" id="currentEditBtn">편집</button><button class="btn small panel-done-btn" id="currentDoneBtn" style="display:none">편집 완료</button><button class="btn small legacy-panel-control" id="currentMore">더보기</button></div><div id="currentList" style="margin-top:8px"></div>';side.insertBefore(currentPanel,$('savedPanel'));
 function taskRow(t){return `<div class="savedrow"><div class="desc"><b>${esc(t.subject)} · ${esc(t.book||'문제집 미입력')}</b><br><span class="hint">${esc(t.start)} ~ ${esc(t.end)} · ${t.duration||1}일</span></div><div class="savedactions"><button class="btn small" data-reuse="${esc(t.id)}">다시 등록</button><button class="tiny" data-edit="${esc(t.id)}">수정</button>${currentEditing?`<button class="tiny" data-task-up="${esc(t.id)}">↑</button><button class="tiny" data-task-down="${esc(t.id)}">↓</button><button class="tiny" data-task-del="${esc(t.id)}">삭제</button>`:''}</div></div>`}
 function renderCurrent(){let order=data.settings.taskOrder||[],a=[...data.tasks].sort((x,y)=>{let ix=order.indexOf(x.id),iy=order.indexOf(y.id);if(ix<0&&iy<0)return x.start.localeCompare(y.start);return (ix<0?9999:ix)-(iy<0?9999:iy)}),shown=currentExpanded?a:a.slice(0,1);$('currentList').innerHTML=shown.length?shown.map(taskRow).join(''):'<div class="empty">현재 적용 중인 일정이 없습니다.</div>';$('currentList').querySelectorAll('[data-reuse]').forEach(b=>b.onclick=()=>reuseTask(b.dataset.reuse));$('currentList').querySelectorAll('[data-edit]').forEach(b=>b.onclick=()=>openEdit(b.dataset.edit));$('currentList').querySelectorAll('[data-task-up],[data-task-down]').forEach(b=>b.onclick=()=>{let id=b.dataset.taskUp||b.dataset.taskDown,ids=[...data.tasks].sort((x,y)=>{let a=order.indexOf(x.id),c=order.indexOf(y.id);return (a<0?9999:a)-(c<0?9999:c)}).map(x=>x.id),i=ids.indexOf(id),j=i+(b.dataset.taskUp?-1:1);if(j<0||j>=ids.length)return;[ids[i],ids[j]]=[ids[j],ids[i]];data.settings.taskOrder=ids;save();renderCurrent()});$('currentList').querySelectorAll('[data-task-del]').forEach(b=>b.onclick=()=>{if(!confirm('이 일정을 삭제할까요?'))return;data.tasks=data.tasks.filter(t=>t.id!==b.dataset.taskDel);save();render()});$('currentMore').textContent=currentExpanded?'접기':'더보기';$('currentEditBtn').textContent=currentEditing?'편집 완료':'편집';}
 function renderSaved(){let m=new Map();data.tasks.forEach(t=>{let k=bookKey(t.subject,t.book||'문제집 미입력');if(!m.has(k))m.set(k,{subject:t.subject,book:t.book||'문제집 미입력',items:[]});m.get(k).items.push(t)});let a=[...m.entries()].filter(([k])=>!data.hiddenSaved.includes(k)),order=data.settings.savedOrder||[];a.sort((x,y)=>{let i=order.indexOf(x[0]),j=order.indexOf(y[0]);return (i<0?9999:i)-(j<0?9999:j)});let shown=savedExpanded?a:a.slice(0,3);$('savedList').innerHTML=shown.length?shown.map(([k,g])=>`<div class=\"savedrow\"><div class=\"desc\"><b>${esc(g.subject)} · ${esc(g.book)}</b><br><span class=\"hint\">등록 일정 ${g.items.length}개</span></div><div class=\"savedactions\"><button class=\"btn small\" data-group=\"${esc(k)}\">다시 등록</button>${savedEditing?`<button class=\"tiny\" data-group-up=\"${esc(k)}\">↑</button><button class=\"tiny\" data-group-down=\"${esc(k)}\">↓</button><button class=\"tiny\" data-group-hide=\"${esc(k)}\">삭제</button>`:''}</div></div>`).join(''):'<div class=\"empty\">등록한 일정이 없습니다.</div>';$('savedList').querySelectorAll('[data-group]').forEach(b=>{if(b.dataset.group)b.onclick=()=>{let t=data.tasks.find(x=>bookKey(x.subject,x.book||'문제집 미입력')===b.dataset.group);if(t)reuseTask(t.id)}});$('savedList').querySelectorAll('[data-group-up],[data-group-down]').forEach(b=>b.onclick=()=>{let k=b.dataset.groupUp||b.dataset.groupDown,keys=a.map(x=>x[0]),i=keys.indexOf(k),j=i+(b.dataset.groupUp?-1:1);if(j<0||j>=keys.length)return;[keys[i],keys[j]]=[keys[j],keys[i]];data.settings.savedOrder=keys;save();renderSaved()});$('savedList').querySelectorAll('[data-group-hide]').forEach(b=>b.onclick=()=>{if(!confirm('이 그룹을 보관함에서만 삭제할까요? 기존 일정은 유지돼요.'))return;data.hiddenSaved.push(b.dataset.groupHide);save();renderSaved()});$('savedMore').textContent=savedExpanded?'접기':'더보기';$('savedEditBtn').textContent=savedEditing?'편집 완료':'편집'}
@@ -838,12 +838,16 @@ if(typeof openDay==='function'){
  }
  attachMenu('goalMenuBtn',[
    {label:'목표 추가',run:()=>openGoal()},
-   {label:'목표 편집',run:()=>{const b=$('goalEditBtn');if(b){b.click()}else showToast('목표 편집 기능을 열 수 없어요.')}} ,
-   {label:'목표 순서 변경',run:()=>{const b=$('goalEditBtn');if(b&&!b.textContent.includes('완료'))b.click();showToast('편집 모드에서 끌어 순서를 바꿀 수 있어요.')}}
+   {label:'편집 모드 전환',run:()=>{if(!$('goalEditBtn').textContent.includes('완료'))$('goalEditBtn').click();else $('goalEditBtn').click()}},
+   {label:'목표 더 보기 / 접기',run:()=>$('goalMore').click()}
+ ]);
+ attachMenu('currentMenuBtn',[
+   {label:'일정 편집 모드',run:()=>$('currentEditBtn').click()},
+   {label:'일정 더 보기 / 접기',run:()=>$('currentMore').click()}
  ]);
  attachMenu('savedMenuBtn',[
-   {label:'보관함 편집',run:()=>$('savedEditBtn')?.click()},
-   {label:'모두 펼쳐 보기',run:()=>{if(!$('savedMore').textContent.includes('접기'))$('savedMore').click()}}
+   {label:'보관함 편집 모드',run:()=>$('savedEditBtn')?.click()},
+   {label:'더 보기 / 접기',run:()=>$('savedMore').click()}
  ]);
  // Book catalogue manager
  let editingBookKey=null, photoData='';
@@ -912,6 +916,109 @@ if(typeof openDay==='function'){
  }
  // Initial render update for compact menu styling and book details.
  renderBooks();
+})();
+</script>
+
+
+<style>
+/* Panel editing layout refinement */
+.panel-heading{display:flex;align-items:center;justify-content:space-between;gap:8px;min-width:0}
+.panel-heading h2{flex:1;min-width:0;margin:0!important;font-size:14px;line-height:1.35}
+.panel-heading>.btn:not(.legacy-panel-control){flex:0 0 36px;width:36px;min-width:36px;height:34px;padding:0;font-size:19px;line-height:1}
+.legacy-panel-control{display:none!important}
+.panel-tools{display:flex;align-items:center;gap:5px;flex-wrap:nowrap}
+.goalhead{align-items:flex-start;flex-wrap:wrap}
+.goalhead>b{flex:1 1 100%;min-width:0;line-height:1.4}
+.goalhead button{margin-top:5px}
+.savedrow{align-items:center;flex-wrap:wrap}
+.savedrow .desc{flex:1 1 100%;min-width:0}
+.savedrow .savedactions{width:100%;justify-content:flex-end;flex-wrap:wrap}
+.row-actions{display:flex;gap:4px;flex-wrap:wrap;justify-content:flex-end}
+.bookrow{flex-wrap:wrap}
+.bookrow .name{flex:1;min-width:0}
+.sf-menu-pop{min-width:158px;max-width:calc(100vw - 36px)}
+.sf-menu-pop button{white-space:nowrap;padding:10px 11px}
+@media(max-width:560px){
+ .panel-heading{gap:6px}
+ .panel-heading h2{font-size:13px}
+ .savedrow .savedactions .btn,.savedrow .savedactions .tiny{min-height:32px}
+ .goalhead button{margin-left:auto}
+}
+</style>
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+
+<script>
+/* Final interaction pass */
+(function(){
+ const $=id=>document.getElementById(id);
+ const getBookKey=()=>{const subject=$('goalSubject')?.value||'기타',name=$('goalBook')?.value?.trim()||'';return subject+'::'+name};
+ function chapterPicker(){
+   const key=getBookKey(),book=(data.bookDetails||{})[key],wrap=$('goalChapterOptions');
+   if(!wrap)return;
+   if(!book||!book.chapters?.length){wrap.innerHTML='<span class="hint">등록된 목차가 없어요. 문제집 목록에서 목차를 먼저 등록하거나 단원 수를 직접 입력해 주세요.</span>';return}
+   const selected=new Set(data.goals?.[key]?.selectedChapters||book.chapters.map((_,i)=>String(i)));
+   wrap.innerHTML=book.chapters.map((c,i)=>`<label class="chapter-check"><input type="checkbox" value="${i}" ${selected.has(String(i))?'checked':''}><span>${String(c.name).replace(/[&<>"]/g,x=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[x]))}</span><small>${c.startPage||'?'}~${c.endPage||'?'}쪽</small></label>`).join('');
+   const count=wrap.querySelectorAll('input:checked').length;
+   const note=document.createElement('div');note.className='hint';note.textContent=`선택 단원 ${count}개`;wrap.appendChild(note);
+   wrap.querySelectorAll('input').forEach(i=>i.onchange=()=>{const n=wrap.querySelectorAll('input:checked').length;note.textContent=`선택 단원 ${n}개`;$('goalUnits').value=Math.max(1,n)});
+ }
+ $('goalBook')?.addEventListener('change',chapterPicker);
+ $('goalSubject')?.addEventListener('change',chapterPicker);
+ const oldOpen=window.openGoal;
+ if(typeof oldOpen==='function')window.openGoal=function(k=null){oldOpen(k);setTimeout(chapterPicker,0)};
+ $('saveGoalBtn')?.addEventListener('click',()=>{
+   const key=getBookKey(),wrap=$('goalChapterOptions');
+   if(wrap&&data.bookDetails?.[key]){
+     const selected=[...wrap.querySelectorAll('input:checked')].map(x=>x.value);
+     if(data.goals?.[key]){data.goals[key].selectedChapters=selected;data.goals[key].units=Math.max(1,selected.length||1);save();renderGoals()}
+   }
+ },true);
+ // Show a clear completion action only in edit mode. Finishing returns to clean view.
+ function syncDone(){
+   [['savedDoneBtn','savedEditBtn','savedEditing'],['goalDoneBtn','goalEditBtn','goalEditing'],['currentDoneBtn','currentEditBtn','currentEditing']].forEach(([done,legacy,state])=>{
+     const b=$(done);if(!b)return;
+     const active=!!window[state];
+     b.style.display=active?'':'none';
+   });
+ }
+ function complete(id){const legacy=$(id);if(legacy){legacy.click();setTimeout(syncDone,0)}}
+ $('savedDoneBtn')?.addEventListener('click',()=>complete('savedEditBtn'));
+ $('goalDoneBtn')?.addEventListener('click',()=>complete('goalEditBtn'));
+ $('currentDoneBtn')?.addEventListener('click',()=>complete('currentEditBtn'));
+ ['savedEditBtn','goalEditBtn','currentEditBtn'].forEach(id=>$(id)?.addEventListener('click',()=>setTimeout(syncDone,0)));
+ const priorSaved=window.renderSaved;
+ if(typeof priorSaved==='function')window.renderSaved=function(){priorSaved();syncDone()};
+ const priorGoals=window.renderGoals;
+ if(typeof priorGoals==='function')window.renderGoals=function(){priorGoals();syncDone()};
+ const priorCurrent=window.renderCurrent;
+ if(typeof priorCurrent==='function')window.renderCurrent=function(){priorCurrent();syncDone()};
+ // Keep the archive reorder controls as touch buttons, never drag.
+ const style=document.createElement('style');
+ style.textContent=`
+ .panel-heading{display:flex;align-items:center;gap:7px;min-width:0}
+ .panel-heading h2{flex:1;min-width:0;margin:0!important}
+ .panel-done-btn{white-space:nowrap;flex:0 0 auto}
+ .chapter-options{display:grid;gap:6px;max-height:210px;overflow:auto;padding:7px;border:1px solid var(--line);border-radius:9px}
+ .chapter-check{display:flex;align-items:center;gap:8px;padding:7px 4px;border-bottom:1px solid var(--line);font-size:12px}
+ .chapter-check span{flex:1}.chapter-check small{color:var(--muted)}
+ #bmOcrBtn{margin-top:7px}
+ @media(max-width:560px){.panel-heading{gap:5px}.panel-heading h2{font-size:13px}.panel-done-btn{font-size:11px;padding:6px 8px}}
+ `;
+ document.head.appendChild(style);
+ $('bmOcrBtn')?.addEventListener('click',async()=>{
+   const file=$('bmPhoto')?.files?.[0];
+   if(!file){$('bmOcrStatus').textContent='먼저 목차 사진을 올려 주세요.';return}
+   if(!window.Tesseract){$('bmOcrStatus').textContent='OCR 모듈을 불러오지 못했어요. 인터넷 연결을 확인해 주세요.';return}
+   $('bmOcrStatus').textContent='사진의 글자를 읽는 중이에요…';
+   try{
+     const result=await Tesseract.recognize(file,'kor+eng',{logger:m=>{if(m.status)$('bmOcrStatus').textContent=m.status+' '+Math.round((m.progress||0)*100)+'%'}});
+     const lines=result.data.text.split(/\r?\n/).map(x=>x.trim()).filter(Boolean);
+     const parsed=lines.map(line=>{const m=line.match(/^(.*?)(?:\s+|\.{2,})\s*(\d{1,4})(?:\s*[-~–]\s*(\d{1,4}))?$/);return m?{name:m[1].replace(/[.…·]+$/,'').trim(),startPage:Number(m[2]),endPage:Number(m[3]||m[2])}:null}).filter(x=>x&&x.name);
+     if(parsed.length){$('bmChapters').innerHTML='';parsed.forEach(c=>addChapter(c.name,c.startPage,c.endPage));$('bmOcrStatus').textContent=`${parsed.length}개 항목을 읽었어요. 사진과 비교해 단원명·페이지를 확인한 뒤 저장해 주세요.`}
+     else $('bmOcrStatus').textContent='글자를 읽었지만 단원과 페이지를 구분하지 못했어요. 직접 입력해 주세요.';
+   }catch(e){$('bmOcrStatus').textContent='사진 인식에 실패했어요. 직접 입력도 이용할 수 있어요.'}
+ });
+ syncDone();
 })();
 </script>
 

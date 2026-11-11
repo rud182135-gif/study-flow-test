@@ -50,7 +50,7 @@ h1{font-size:21px;letter-spacing:1.4px;margin:0}.sub{font-size:12px;color:var(--
 <body>
 <div class="app">
 <header><div class="brand"><div class="logo">SF</div><div><h1>STUDY FLOW</h1><div class="sub">나만의 공부 일정 캘린더</div></div></div>
-<div class="actions"><button class="btn" id="undoBtn">↶ 뒤로</button><button class="btn" id="redoBtn">↷ 앞으로</button><button class="btn" id="settingsBtn">설정</button><button class="btn" id="helpBtn">사용 방법</button><button class="btn" id="backup">백업 내보내기</button><button class="btn" id="dailyBackupBtn">자동 백업 기록</button><button class="btn" id="restoreBtn">파일 복원</button><input id="restoreFile" type="file" accept="application/json" hidden><button class="btn primary" id="addBtn">＋ 일정 추가</button></div></header>
+<div class="actions"><button class="btn" id="undoBtn">↶ 뒤로</button><button class="btn" id="redoBtn">↷ 앞으로</button><button class="btn" id="settingsBtn">설정</button><button class="btn" id="helpBtn" style="display:none">사용 방법</button><button class="btn" id="backup" style="display:none">백업 내보내기</button><button class="btn" id="dailyBackupBtn" style="display:none">자동 백업 기록</button><button class="btn" id="restoreBtn" style="display:none">파일 복원</button><input id="restoreFile" type="file" accept="application/json" hidden><button class="btn primary" id="addBtn">＋ 일정 추가</button></div></header>
 <div class="toolbar"><div class="monthnav"><button class="navbtn" id="prev">‹</button><strong id="monthTitle"></strong><button class="navbtn" id="next">›</button></div><button class="btn" id="todayBtn">오늘</button></div>
 <div class="layout"><section class="calendar"><div class="weekdays"><div class="weekday">일</div><div class="weekday">월</div><div class="weekday">화</div><div class="weekday">수</div><div class="weekday">목</div><div class="weekday">금</div><div class="weekday">토</div></div><div class="days" id="days"></div></section>
 <aside class="side">
@@ -947,78 +947,81 @@ if(typeof openDay==='function'){
 </style>
 <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 
+
+
+
 <script>
-/* Final interaction pass */
+/* UI correction: settings hub, draggable panels, explicit edit completion */
 (function(){
  const $=id=>document.getElementById(id);
- const getBookKey=()=>{const subject=$('goalSubject')?.value||'기타',name=$('goalBook')?.value?.trim()||'';return subject+'::'+name};
- function chapterPicker(){
-   const key=getBookKey(),book=(data.bookDetails||{})[key],wrap=$('goalChapterOptions');
-   if(!wrap)return;
-   if(!book||!book.chapters?.length){wrap.innerHTML='<span class="hint">등록된 목차가 없어요. 문제집 목록에서 목차를 먼저 등록하거나 단원 수를 직접 입력해 주세요.</span>';return}
-   const selected=new Set(data.goals?.[key]?.selectedChapters||book.chapters.map((_,i)=>String(i)));
-   wrap.innerHTML=book.chapters.map((c,i)=>`<label class="chapter-check"><input type="checkbox" value="${i}" ${selected.has(String(i))?'checked':''}><span>${String(c.name).replace(/[&<>"]/g,x=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[x]))}</span><small>${c.startPage||'?'}~${c.endPage||'?'}쪽</small></label>`).join('');
-   const count=wrap.querySelectorAll('input:checked').length;
-   const note=document.createElement('div');note.className='hint';note.textContent=`선택 단원 ${count}개`;wrap.appendChild(note);
-   wrap.querySelectorAll('input').forEach(i=>i.onchange=()=>{const n=wrap.querySelectorAll('input:checked').length;note.textContent=`선택 단원 ${n}개`;$('goalUnits').value=Math.max(1,n)});
+ const settings=$('sfSettingsBack');
+ if(settings){
+  const body=settings.querySelector('.sf-settings');
+  const section=document.createElement('section');
+  section.className='sf-setting-section';
+  section.innerHTML='<h3>백업 및 복원</h3><div class="sf-setting-row"><span>백업 파일 내보내기</span><button class="btn small" id="sfBackupExport">내보내기</button></div><div class="sf-setting-row"><span>자동 백업 기록</span><button class="btn small" id="sfBackupHistory">기록 보기</button></div><div class="sf-setting-row"><span>백업 파일 복원</span><button class="btn small" id="sfBackupRestore">파일 선택</button></div><p class="hint">자동 백업은 이 브라우저에 저장됩니다. 브라우저 데이터 삭제 전에는 백업 파일도 별도로 내보내 주세요.</p>';
+  const help=document.createElement('section');
+  help.className='sf-setting-section';
+  help.innerHTML='<h3>사용 방법</h3><p class="hint">일정 막대를 누르면 수정할 수 있고, 다른 날짜로 끌면 일정을 이동할 수 있어요. 각 패널의 ⋯ 메뉴에서 편집 기능을 열 수 있습니다.</p><button class="btn small" id="sfOpenHelp">자세한 사용 방법 보기</button>';
+  const anchor=body.querySelector('.modalfoot');
+  body.insertBefore(section,anchor);body.insertBefore(help,anchor);
+  $('sfBackupExport').onclick=()=>$('backup').click();
+  $('sfBackupHistory').onclick=()=>$('dailyBackupBtn').click();
+  $('sfBackupRestore').onclick=()=>$('restoreBtn').click();
+  $('sfOpenHelp').onclick=()=>$('helpBtn').click();
  }
- $('goalBook')?.addEventListener('change',chapterPicker);
- $('goalSubject')?.addEventListener('change',chapterPicker);
- const oldOpen=window.openGoal;
- if(typeof oldOpen==='function')window.openGoal=function(k=null){oldOpen(k);setTimeout(chapterPicker,0)};
- $('saveGoalBtn')?.addEventListener('click',()=>{
-   const key=getBookKey(),wrap=$('goalChapterOptions');
-   if(wrap&&data.bookDetails?.[key]){
-     const selected=[...wrap.querySelectorAll('input:checked')].map(x=>x.value);
-     if(data.goals?.[key]){data.goals[key].selectedChapters=selected;data.goals[key].units=Math.max(1,selected.length||1);save();renderGoals()}
-   }
- },true);
- // Show a clear completion action only in edit mode. Finishing returns to clean view.
- function syncDone(){
-   [['savedDoneBtn','savedEditBtn','savedEditing'],['goalDoneBtn','goalEditBtn','goalEditing'],['currentDoneBtn','currentEditBtn','currentEditing']].forEach(([done,legacy,state])=>{
-     const b=$(done);if(!b)return;
-     const active=!!window[state];
-     b.style.display=active?'':'none';
+ // Make sure only the settings entry remains in the top action bar.
+ ['helpBtn','backup','dailyBackupBtn','restoreBtn'].forEach(id=>{if($(id))$(id).style.display='none'});
+ // Reorder all dashboard panels directly by dragging their headers.
+ const side=document.querySelector('.side');
+ const panelIds=['currentPanel','savedPanel','goalPanel','bookPanel','statsPanel'];
+ let active=null, startY=0;
+ function persistPanelOrder(){
+  data.settings=data.settings||{};
+  data.settings.panelOrder=[...side.children].filter(el=>panelIds.includes(el.id)).map(el=>el.id);
+  save();
+ }
+ panelIds.forEach(id=>{
+  const panel=$(id); if(!panel)return;
+  const head=panel.querySelector(':scope > .panel-heading')||panel.firstElementChild;
+  if(!head)return;
+  head.classList.add('sf-draggable-heading');
+  if(!head.querySelector('.sf-panel-grip')){
+   const grip=document.createElement('button');grip.type='button';grip.className='sf-panel-grip';grip.textContent='⠿';grip.title='패널을 끌어 순서 변경';grip.setAttribute('aria-label','패널 순서 변경');head.insertBefore(grip,head.firstChild);
+   grip.addEventListener('pointerdown',e=>{active=panel;startY=e.clientY;grip.setPointerCapture?.(e.pointerId);panel.classList.add('sf-panel-moving');e.preventDefault()});
+   grip.addEventListener('pointermove',e=>{
+    if(!active||active!==panel)return;
+    const candidates=[...side.querySelectorAll(':scope > .panel')].filter(x=>x!==active);
+    const target=candidates.find(x=>{const r=x.getBoundingClientRect();return e.clientY>=r.top&&e.clientY<=r.bottom});
+    if(target){const r=target.getBoundingClientRect();if(e.clientY>r.top+r.height/2)target.after(active);else target.before(active)}
    });
- }
- function complete(id){const legacy=$(id);if(legacy){legacy.click();setTimeout(syncDone,0)}}
- $('savedDoneBtn')?.addEventListener('click',()=>complete('savedEditBtn'));
- $('goalDoneBtn')?.addEventListener('click',()=>complete('goalEditBtn'));
- $('currentDoneBtn')?.addEventListener('click',()=>complete('currentEditBtn'));
- ['savedEditBtn','goalEditBtn','currentEditBtn'].forEach(id=>$(id)?.addEventListener('click',()=>setTimeout(syncDone,0)));
- const priorSaved=window.renderSaved;
- if(typeof priorSaved==='function')window.renderSaved=function(){priorSaved();syncDone()};
- const priorGoals=window.renderGoals;
- if(typeof priorGoals==='function')window.renderGoals=function(){priorGoals();syncDone()};
- const priorCurrent=window.renderCurrent;
- if(typeof priorCurrent==='function')window.renderCurrent=function(){priorCurrent();syncDone()};
- // Keep the archive reorder controls as touch buttons, never drag.
- const style=document.createElement('style');
- style.textContent=`
- .panel-heading{display:flex;align-items:center;gap:7px;min-width:0}
- .panel-heading h2{flex:1;min-width:0;margin:0!important}
- .panel-done-btn{white-space:nowrap;flex:0 0 auto}
- .chapter-options{display:grid;gap:6px;max-height:210px;overflow:auto;padding:7px;border:1px solid var(--line);border-radius:9px}
- .chapter-check{display:flex;align-items:center;gap:8px;padding:7px 4px;border-bottom:1px solid var(--line);font-size:12px}
- .chapter-check span{flex:1}.chapter-check small{color:var(--muted)}
- #bmOcrBtn{margin-top:7px}
- @media(max-width:560px){.panel-heading{gap:5px}.panel-heading h2{font-size:13px}.panel-done-btn{font-size:11px;padding:6px 8px}}
- `;
- document.head.appendChild(style);
- $('bmOcrBtn')?.addEventListener('click',async()=>{
-   const file=$('bmPhoto')?.files?.[0];
-   if(!file){$('bmOcrStatus').textContent='먼저 목차 사진을 올려 주세요.';return}
-   if(!window.Tesseract){$('bmOcrStatus').textContent='OCR 모듈을 불러오지 못했어요. 인터넷 연결을 확인해 주세요.';return}
-   $('bmOcrStatus').textContent='사진의 글자를 읽는 중이에요…';
-   try{
-     const result=await Tesseract.recognize(file,'kor+eng',{logger:m=>{if(m.status)$('bmOcrStatus').textContent=m.status+' '+Math.round((m.progress||0)*100)+'%'}});
-     const lines=result.data.text.split(/\r?\n/).map(x=>x.trim()).filter(Boolean);
-     const parsed=lines.map(line=>{const m=line.match(/^(.*?)(?:\s+|\.{2,})\s*(\d{1,4})(?:\s*[-~–]\s*(\d{1,4}))?$/);return m?{name:m[1].replace(/[.…·]+$/,'').trim(),startPage:Number(m[2]),endPage:Number(m[3]||m[2])}:null}).filter(x=>x&&x.name);
-     if(parsed.length){$('bmChapters').innerHTML='';parsed.forEach(c=>addChapter(c.name,c.startPage,c.endPage));$('bmOcrStatus').textContent=`${parsed.length}개 항목을 읽었어요. 사진과 비교해 단원명·페이지를 확인한 뒤 저장해 주세요.`}
-     else $('bmOcrStatus').textContent='글자를 읽었지만 단원과 페이지를 구분하지 못했어요. 직접 입력해 주세요.';
-   }catch(e){$('bmOcrStatus').textContent='사진 인식에 실패했어요. 직접 입력도 이용할 수 있어요.'}
+   const finish=()=>{if(!active)return;active.classList.remove('sf-panel-moving');active=null;persistPanelOrder()};
+   grip.addEventListener('pointerup',finish);grip.addEventListener('pointercancel',finish);
+  }
  });
- syncDone();
+ // Re-render panel order on next load through existing settings data.
+ const st=document.createElement('style');
+ st.textContent=`
+ .sf-panel-grip{border:0;background:#f1f0ed;color:#777;border-radius:7px;width:25px;height:27px;font-size:17px;touch-action:none;cursor:grab;flex:0 0 auto}
+ .sf-draggable-heading{display:flex;align-items:center;gap:7px}
+ .sf-panel-moving{opacity:.65;outline:2px dashed var(--accent)}
+ .panel-heading .legacy-panel-control{display:none!important}
+ .panel-heading .panel-done-btn{display:none!important}
+ .panel-heading.is-editing .legacy-panel-control{display:none!important}
+ .panel-heading.is-editing .panel-done-btn{display:inline-flex!important}
+ `;
+ document.head.appendChild(st);
+ // Explicit edit mode controls: toggle only the relevant panel and fully exit on completion.
+ [['currentEditBtn','currentDoneBtn','currentPanel'],['savedEditBtn','savedDoneBtn','savedPanel'],['goalEditBtn','goalDoneBtn','goalPanel']].forEach(([editId,doneId,panelId])=>{
+  const edit=$(editId),done=$(doneId),panel=$(panelId);if(!edit||!done||!panel)return;
+  const head=edit.closest('.panel-heading');
+  function sync(){const on=edit.textContent.includes('완료');head?.classList.toggle('is-editing',on);done.style.display=on?'':'none';}
+  edit.addEventListener('click',()=>setTimeout(sync,0));
+  done.style.display='none';
+  done.addEventListener('click',()=>{if(edit.textContent.includes('완료'))edit.click();setTimeout(sync,0)});
+  sync();
+ });
+ // Edit buttons should be available from ellipsis menus, but remain hidden outside edit mode.
 })();
 </script>
 

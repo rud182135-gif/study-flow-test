@@ -98,9 +98,7 @@ h1{font-size:21px;letter-spacing:1.4px;margin:0}.sub{font-size:12px;color:var(--
 <div class="field"><label>과목</label><select id="bmSubject"><option>국어</option><option>영어</option><option>행정법</option><option>행정학</option><option>기타</option></select></div>
 <div class="field"><label>문제집 이름</label><input id="bmName" placeholder="예: 행정법 기출문제집"></div>
 <div class="field"><label>전체 페이지 수</label><input id="bmPages" type="number" min="1" placeholder="예: 850"></div>
-<div class="field"><label>목차 사진</label><input id="bmPhoto" type="file" accept="image/*"></div>
-<div class="field full"><img id="bmPreview" alt="목차 사진 미리보기" style="display:none;max-width:100%;max-height:220px;object-fit:contain;border:1px solid var(--line);border-radius:8px"></div>
-<div class="field full"><label>단원별 목차 및 페이지 범위</label><div id="bmChapters"></div><button class="btn small" type="button" id="bmAddChapter">＋ 단원 추가</button><div class="hint">사진은 참고용으로 첨부할 수 있어요. 현재 버전은 사진 속 글자 자동 인식(OCR)은 아직 연결되지 않아, 단원명과 페이지는 확인 후 직접 입력해야 해요.</div></div>
+<div class="field full"><label>단원별 목차 및 페이지 범위</label><div id="bmChapters"></div><button class="btn small" type="button" id="bmAddChapter">＋ 단원 추가</button><div class="hint">단원명과 시작·끝 페이지를 직접 입력해 주세요. 등록한 목차는 회독 목표 설정에서 불러올 수 있어요.</div></div>
 </div>
 <div class="modalfoot"><button class="btn" id="bmDelete" style="display:none">문제집 삭제</button><div class="rightbuttons"><button class="btn" id="bmCancel">취소</button><button class="btn primary" id="bmSave">저장</button></div></div>
 </div></div>
@@ -850,7 +848,7 @@ if(typeof openDay==='function'){
    {label:'더 보기 / 접기',run:()=>$('savedMore').click()}
  ]);
  // Book catalogue manager
- let editingBookKey=null, photoData='';
+ let editingBookKey=null;
  const chapters=$('bmChapters');
  function addChapter(name='',from='',to=''){
    const row=document.createElement('div');row.className='chapter-row';
@@ -858,20 +856,15 @@ if(typeof openDay==='function'){
    row.querySelector('button').onclick=()=>row.remove();chapters.appendChild(row);
  }
  function openBookManager(key=null){
-   editingBookKey=key;photoData='';chapters.innerHTML='';$('bmPreview').style.display='none';$('bmPhoto').value='';
+   editingBookKey=key;chapters.innerHTML='';
    $('bmDelete').style.display=key?'':'none';
    const [subject,name]=(key||'기타::').split('::'),b=(data.bookDetails||{})[key]||{};
    $('bmSubject').value=subject;$('bmName').value=name;$('bmPages').value=b.totalPages||'';
    (b.chapters||[]).forEach(c=>addChapter(c.name,c.startPage,c.endPage));
    if(!(b.chapters||[]).length)addChapter();
-   if(b.photo){photoData=b.photo;$('bmPreview').src=b.photo;$('bmPreview').style.display='block'}
    $('bookManagerBack').classList.add('show');
  }
- $('bmPhoto').onchange=async e=>{
-   const f=e.target.files[0];if(!f)return;
-   if(f.size>5*1024*1024){showToast('사진은 5MB 이하로 선택해 주세요.');e.target.value='';return}
-   const reader=new FileReader();reader.onload=()=>{const img=new Image();img.onload=()=>{const scale=Math.min(1,1400/Math.max(img.width,img.height)),canvas=document.createElement('canvas');canvas.width=Math.round(img.width*scale);canvas.height=Math.round(img.height*scale);canvas.getContext('2d').drawImage(img,0,0,canvas.width,canvas.height);photoData=canvas.toDataURL('image/jpeg',0.72);$('bmPreview').src=photoData;$('bmPreview').style.display='block'};img.src=reader.result};reader.readAsDataURL(f);
- };
+ window.openBookManager=openBookManager;
  $('bmAddChapter').onclick=()=>addChapter();
  $('bmCancel').onclick=()=>$('bookManagerBack').classList.remove('show');
  $('bmSave').onclick=()=>{
@@ -879,7 +872,7 @@ if(typeof openDay==='function'){
    if(!name){showToast('문제집 이름을 입력해 주세요.');return}
    const key=subject+'::'+name,rows=[...chapters.querySelectorAll('.chapter-row')],list=rows.map(r=>({name:r.querySelector('.bm-ch-name').value.trim(),startPage:Number(r.querySelector('.bm-ch-from').value)||0,endPage:Number(r.querySelector('.bm-ch-to').value)||0})).filter(c=>c.name);
    if(list.some(c=>c.startPage&&c.endPage&&c.endPage<c.startPage)){showToast('단원 페이지 범위를 확인해 주세요.');return}
-   data.bookDetails=data.bookDetails||{};data.bookDetails[key]={subject,name,totalPages,chapters:list,photo:photoData};
+   data.bookDetails=data.bookDetails||{};data.bookDetails[key]={subject,name,totalPages,chapters:list};
    data.books[key]=data.books[key]||palette[subject]||'#ccc';data.hiddenBooks=(data.hiddenBooks||[]).filter(x=>x!==key);
    save();$('bookManagerBack').classList.remove('show');render();showToast('문제집 목차를 저장했어요.');
  };
@@ -1022,6 +1015,187 @@ if(typeof openDay==='function'){
   sync();
  });
  // Edit buttons should be available from ellipsis menus, but remain hidden outside edit mode.
+})();
+</script>
+
+
+<script>
+/* STUDY FLOW: list-first panels (no edit mode / no overflow menus) */
+(function(){
+ const $=id=>document.getElementById(id);
+ const escHtml=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+ const panelIds=['currentPanel','savedPanel','goalPanel','bookPanel','statsPanel'];
+ const panelNames={currentPanel:'현재 적용 중인 일정',savedPanel:'내 일정 보관함',goalPanel:'회독 목표',bookPanel:'문제집 목록',statsPanel:'이번 달 공부 현황'};
+ // Clean headers: remove ellipsis/edit controls, use a simple plus action where applicable.
+ const plusSpecs={
+   currentPanel:['currentPanelPlus','＋',()=> $('addBtn').click()],
+   savedPanel:['savedPanelPlus','＋',()=> $('addBtn').click()],
+   goalPanel:['goalPanelPlus','＋',()=> window.openGoal?.()],
+   bookPanel:['bookPanelPlus','＋',()=>window.openBookManager?.()]
+ };
+ panelIds.forEach(id=>{
+   const panel=$(id); if(!panel)return;
+   const h=panel.querySelector(':scope > .panel-heading'); if(!h)return;
+   h.querySelectorAll('button').forEach(b=>b.remove());
+   const title=h.querySelector('h2');
+   if(title){title.textContent=panelNames[id];}
+   if(plusSpecs[id]){
+     const [bid,label,fn]=plusSpecs[id];
+     const b=document.createElement('button');b.className='btn small panel-plus';b.id=bid;b.type='button';b.textContent=label;b.setAttribute('aria-label',panelNames[id]+' 추가');b.onclick=fn;h.appendChild(b);
+   }
+   const collapse=document.createElement('button');collapse.className='panel-collapse';collapse.type='button';collapse.textContent='닫기';
+   collapse.onclick=()=>{data.settings.collapsedPanels=data.settings.collapsedPanels||{};data.settings.collapsedPanels[id]=!data.settings.collapsedPanels[id];panel.classList.toggle('is-collapsed',!!data.settings.collapsedPanels[id]);collapse.textContent=panel.classList.contains('is-collapsed')?'펼치기':'닫기';save()};
+   h.appendChild(collapse);
+ });
+ // No editing-mode controls or legacy menu buttons remain visible.
+ document.querySelectorAll('.legacy-panel-control,.panel-done-btn,#currentMenuBtn,#savedMenuBtn,#goalMenuBtn,#bookMenuBtn').forEach(x=>x.style.display='none');
+ // Ensure all panels have a bottom "더보기" control.
+ function moreButton(panelId,containerId,expanded,getExpanded,setExpanded,renderFn){
+   const container=$(containerId); if(!container)return;
+   let b=$(panelId+'MoreBottom');
+   if(!b){b=document.createElement('button');b.id=panelId+'MoreBottom';b.className='btn small panel-more-bottom';container.after(b)}
+   b.textContent=getExpanded()?'접기':'더보기';
+   b.style.display=container.dataset.totalCount && Number(container.dataset.totalCount)<=Number(container.dataset.visibleCount||3)?'none':'';
+   b.onclick=()=>{setExpanded(!getExpanded());renderFn()};
+ }
+ // Touch behavior: hold a row to reorder; swipe left to remove; tap to edit.
+ function bindTouchList(container,selector,handlers){
+   if(!container)return;
+   let state=null,timer=null;
+   const clear=()=>{if(timer)clearTimeout(timer);timer=null;};
+   container.querySelectorAll(selector).forEach(row=>{
+     row.style.touchAction='pan-y';
+     row.addEventListener('pointerdown',e=>{
+       if(e.target.closest('button,input,select,a'))return;
+       state={row,id:row.dataset.key||row.dataset.goalKey||row.dataset.bookKey||row.dataset.taskId,startX:e.clientX,startY:e.clientY,lastX:e.clientX,lastY:e.clientY,drag:false,swipe:false};
+       timer=setTimeout(()=>{if(!state)return;state.drag=true;row.classList.add('sf-hold-drag');row.setPointerCapture?.(e.pointerId);},420);
+     });
+     row.addEventListener('pointermove',e=>{
+       if(!state||state.row!==row)return;
+       const dx=e.clientX-state.startX,dy=e.clientY-state.startY;
+       state.lastX=e.clientX;state.lastY=e.clientY;
+       if(!state.drag&&Math.abs(dx)>18)clear();
+       if(state.drag){
+         e.preventDefault();
+         const peers=[...container.querySelectorAll(selector)].filter(x=>x!==row);
+         const target=peers.find(x=>{const r=x.getBoundingClientRect();return e.clientY>=r.top&&e.clientY<=r.bottom});
+         peers.forEach(x=>x.classList.remove('sf-drag-over'));
+         if(target){target.classList.add('sf-drag-over');const r=target.getBoundingClientRect();if(e.clientY>r.top+r.height/2)target.after(row);else target.before(row)}
+       } else if(Math.abs(dx)>45&&Math.abs(dx)>Math.abs(dy)*1.25){state.swipe=true;row.style.transform=`translateX(${Math.min(0,dx)}px)`;row.classList.add('sf-swipe-remove');}
+     },{passive:false});
+     const finish=e=>{
+       clear();if(!state||state.row!==row)return;
+       const s=state;state=null;
+       row.classList.remove('sf-hold-drag','sf-drag-over');
+       if(s.drag){row.style.transform='';const ids=[...container.querySelectorAll(selector)].map(x=>x.dataset.key||x.dataset.goalKey||x.dataset.bookKey||x.dataset.taskId);handlers.reorder?.(ids);return;}
+       const dx=e.clientX-s.startX;
+       if(s.swipe&&dx < -75){row.style.transform='';row.classList.remove('sf-swipe-remove');handlers.remove?.(row);return;}
+       row.style.transform='';row.classList.remove('sf-swipe-remove');
+       if(Math.abs(dx)<18&&Math.abs(e.clientY-s.startY)<18)handlers.tap?.(row);
+     };
+     row.addEventListener('pointerup',finish);
+     row.addEventListener('pointercancel',finish);
+   });
+ }
+ // Current active schedule rows: tap opens schedule editor; swipe deletes it.
+ function renderCurrentList(){
+   const list=$('currentList');if(!list)return;
+   const order=data.settings.taskOrder||[];
+   let arr=[...data.tasks].sort((a,b)=>{let i=order.indexOf(a.id),j=order.indexOf(b.id);return (i<0?9999:i)-(j<0?9999:j)});
+   const shown=currentExpanded?arr:arr.slice(0,1);
+   list.dataset.totalCount=arr.length;list.dataset.visibleCount=shown.length;
+   list.innerHTML=shown.map(t=>`<div class="sf-list-row savedrow" data-task-id="${escHtml(t.id)}"><div class="desc"><b>${escHtml(t.subject)} · ${escHtml(t.book||'문제집 미입력')}</b><br><span class="hint">${escHtml(t.start)} ~ ${escHtml(t.end)} · ${t.duration||1}일</span></div></div>`).join('')||'<div class="empty">현재 적용 중인 일정이 없습니다.</div>';
+   bindTouchList(list,'.sf-list-row',{tap:r=>openEdit(r.dataset.taskId),remove:r=>{data.tasks=data.tasks.filter(t=>t.id!==r.dataset.taskId);save();render()},reorder:ids=>{data.settings.taskOrder=ids;save();renderCurrentList()}});
+   moreButton('currentList','currentList',currentExpanded,()=>currentExpanded,v=>currentExpanded=v,renderCurrentList);
+ }
+ // Saved schedule groups: tap opens the first matching schedule; swipe hides group only.
+ function renderSavedList(){
+   const map=new Map();
+   data.tasks.forEach(t=>{const k=bookKey(t.subject,t.book||'문제집 미입력');if(!map.has(k))map.set(k,{subject:t.subject,book:t.book||'문제집 미입력',items:[]});map.get(k).items.push(t)});
+   const order=data.settings.savedOrder||[],arr=[...map.entries()].filter(([k])=>!(data.hiddenSaved||[]).includes(k)).sort((a,b)=>{let i=order.indexOf(a[0]),j=order.indexOf(b[0]);return(i<0?9999:i)-(j<0?9999:j)});
+   const shown=savedExpanded?arr:arr.slice(0,3),list=$('savedList');list.dataset.totalCount=arr.length;list.dataset.visibleCount=shown.length;
+   list.innerHTML=shown.map(([k,g])=>`<div class="sf-list-row savedrow" data-key="${escHtml(k)}"><div class="desc"><b>${escHtml(g.subject)} · ${escHtml(g.book)}</b><br><span class="hint">등록 일정 ${g.items.length}개</span></div></div>`).join('')||'<div class="empty">등록한 일정이 없습니다.</div>';
+   bindTouchList(list,'.sf-list-row',{tap:r=>{const t=data.tasks.find(x=>bookKey(x.subject,x.book||'문제집 미입력')===r.dataset.key);if(t)openEdit(t.id)},remove:r=>{data.hiddenSaved=data.hiddenSaved||[];data.hiddenSaved.push(r.dataset.key);save();renderSavedList()},reorder:ids=>{data.settings.savedOrder=ids;save();renderSavedList()}});
+   moreButton('savedList','savedList',savedExpanded,()=>savedExpanded,v=>savedExpanded=v,renderSavedList);
+ }
+ // Goals use the registered book TOC as the source for unit count and selected chapters.
+ function updateGoalToc(){
+   const subject=$('goalSubject')?.value||'',book=$('goalBook')?.value?.trim()||'',key=bookKey(subject,book),detail=data.bookDetails?.[key],wrap=$('goalChapterOptions');
+   if(!wrap)return;
+   if(!detail?.chapters?.length){wrap.innerHTML='<div class="hint">이 문제집에 등록된 목차가 없어요. 문제집 목록에서 문제집을 눌러 단원을 먼저 등록해 주세요.</div>';return}
+   const chosen=new Set(data.goals?.[key]?.selectedChapters||detail.chapters.map((_,i)=>String(i)));
+   wrap.innerHTML=detail.chapters.map((c,i)=>`<label class="chapter-check"><input type="checkbox" value="${i}" ${chosen.has(String(i))?'checked':''}><span>${escHtml(c.name)}</span><small>${c.startPage||'?'}~${c.endPage||'?'}쪽</small></label>`).join('');
+   const update=()=>{$('goalUnits').value=wrap.querySelectorAll('input:checked').length||1};
+   wrap.querySelectorAll('input').forEach(x=>x.addEventListener('change',update));update();
+ }
+ $('goalSubject')?.addEventListener('change',updateGoalToc);
+ $('goalBook')?.addEventListener('input',updateGoalToc);
+ const oldOpenGoal=window.openGoal;
+ if(typeof oldOpenGoal==='function')window.openGoal=function(k=null){oldOpenGoal(k);setTimeout(updateGoalToc,0)};
+ // Save goal with selected registered TOC units as the source of truth.
+ $('saveGoalBtn').onclick=()=>{
+   const subject=$('goalSubject').value,book=$('goalBook').value.trim(),unitsInput=Math.max(1,Number($('goalUnits').value)||1),rounds=Math.max(1,Number($('goalRounds').value)||1),currentRound=Math.max(1,Number($('goalCurrentRound').value)||1),currentUnitText=$('goalCurrentUnit').value.trim(),key=bookKey(subject,book);
+   if(!book){showToast('문제집을 선택하거나 이름을 입력해 주세요.');return}
+   const detail=data.bookDetails?.[key],wrap=$('goalChapterOptions');
+   const selected=detail?.chapters?.length?[...wrap.querySelectorAll('input:checked')].map(x=>x.value):[];
+   const units=detail?.chapters?.length?Math.max(1,selected.length):unitsInput;
+   const currentUnit=Math.max(0,Math.min(units,Number((currentUnitText.match(/\d+/)||[])[0])||0));
+   const old=data.goals[key]||{};
+   data.goals[key]={...old,subject,book,units,rounds,currentRound,currentUnit,currentUnitText,selectedChapters:selected,color:$('goalColor')?.value||palette[subject]||'#7183b5'};
+   data.books[key]=data.books[key]||palette[subject]||'#ccc';
+   data.hiddenBooks=(data.hiddenBooks||[]).filter(x=>x!==key);
+   save();$('goalBack').classList.remove('show');render();showToast('회독 목표를 저장했어요.');
+ };
+ // Replace goal rendering with tap-to-edit, swipe-delete, hold-to-reorder and a bottom more control.
+ function renderGoalList(){
+   const entries=Object.entries(data.goals||{}),shown=goalExpanded?entries:entries.slice(0,3),list=$('goalList');
+   list.dataset.totalCount=entries.length;list.dataset.visibleCount=shown.length;
+   list.innerHTML=shown.map(([k,g])=>{
+     const total=Math.max(1,Number(g.units)||1),target=Math.max(1,Number(g.rounds)||1),r=Math.max(1,Number(g.currentRound)||1),u=Math.max(0,Math.min(total,Number(g.currentUnit)||0)),done=Math.min(target*total,Math.max(0,(r-1)*total+u)),pct=Math.round(done/(target*total)*100);
+     return `<div class="sf-list-row goalrow" data-goal-key="${escHtml(k)}" style="--goal-color:${g.color||palette[g.subject]||'#7183b5'}"><div class="goalhead"><b>${escHtml(g.subject)} · ${escHtml(g.book)}</b></div><div class="goalbar"><span style="width:${pct}%"></span></div><div class="goalmeta">현재 ${r}회독 ${u}단원 · 목표 ${target}회독 · ${pct}%</div></div>`;
+   }).join('')||'<div class="empty">＋ 버튼으로 회독 목표를 추가해 주세요.</div>';
+   bindTouchList(list,'.sf-list-row',{tap:r=>openGoal(r.dataset.goalKey),remove:r=>{delete data.goals[r.dataset.goalKey];save();render()},reorder:keys=>{const rest=Object.keys(data.goals).filter(k=>!keys.includes(k));data.goals=Object.fromEntries([...keys,...rest].map(k=>[k,data.goals[k]]));save();renderGoalList()}});
+   moreButton('goalList','goalList',goalExpanded,()=>goalExpanded,v=>goalExpanded=v,renderGoalList);
+ }
+ // Book catalogue: click to edit, swipe to hide; long press to reorder.
+ function renderBookList(){
+   const keys=allBookKeys(),order=data.settings.bookOrder||[],arr=keys.sort((a,b)=>{let i=order.indexOf(a),j=order.indexOf(b);return(i<0?9999:i)-(j<0?9999:j)});
+   const shown=window.bookExpanded?arr:arr.slice(0,3),list=$('bookList');list.dataset.totalCount=arr.length;list.dataset.visibleCount=shown.length;
+   list.innerHTML=shown.map(k=>{const [s,n]=k.split('::'),d=data.bookDetails?.[k],count=d?.chapters?.length||0;return `<div class="sf-list-row bookrow" data-book-key="${escHtml(k)}"><span class="name"><b>${escHtml(s)} · ${escHtml(n)}</b><small>${count?`목차 ${count}단원${d.totalPages?' · '+d.totalPages+'쪽':''}`:'목차 미등록'}</small></span></div>`}).join('')||'<div class="empty">＋ 버튼으로 문제집을 추가해 주세요.</div>';
+   // Existing click handler on a book title opens the editor; preserve by dispatching its original span click.
+   bindTouchList(list,'.sf-list-row',{tap:r=>{const k=r.dataset.bookKey;window.openBookManager?.(k)},remove:r=>{data.hiddenBooks=data.hiddenBooks||[];data.hiddenBooks.push(r.dataset.bookKey);save();renderBookList()},reorder:keys=>{data.settings.bookOrder=keys;save();renderBookList()}});
+   moreButton('bookList','bookList',!!window.bookExpanded,()=>!!window.bookExpanded,v=>window.bookExpanded=v,renderBookList);
+ }
+ // The manager's add action is exposed as a plus button, not an ellipsis menu.
+ $('bookPanelPlus')?.addEventListener('click',()=>{});
+ // Set a goal's book from the catalogue without free-typing ambiguity.
+ $('goalBook')?.setAttribute('list','registeredBookNames');
+ const dl=document.createElement('datalist');dl.id='registeredBookNames';
+ dl.innerHTML=Object.keys(data.bookDetails||{}).map(k=>`<option value="${escHtml(k.split('::').slice(1).join('::'))}">`).join('');
+ $('goalBook')?.after(dl);
+ // Styles and remove all legacy edit/menu affordances.
+ const style=document.createElement('style');style.textContent=`
+ .panel-heading{display:flex;align-items:center;gap:8px}.panel-heading h2{flex:1;min-width:0}
+ .panel-plus{min-width:36px;width:36px;height:34px;padding:0;font-size:20px}
+ .panel-more-bottom{display:block;margin:10px auto 0;min-width:90px}
+ .sf-list-row{position:relative;transition:transform .16s,opacity .16s;cursor:pointer;user-select:none;-webkit-user-select:none}
+ .sf-list-row.sf-hold-drag{opacity:.62;outline:2px dashed var(--accent);z-index:2}
+ .sf-list-row.sf-drag-over{outline:2px dashed var(--accent)}
+ .sf-list-row.sf-swipe-remove{background:#fff0f0}
+ .bookrow .name{display:flex;flex-direction:column;gap:3px;white-space:normal}
+ .bookrow small{font-size:10px;color:var(--muted)}
+ .chapter-options{display:grid;gap:5px;max-height:190px;overflow:auto;border:1px solid var(--line);border-radius:9px;padding:8px}
+ .chapter-check{display:flex;align-items:center;gap:8px;font-size:12px;padding:5px 0}
+ .chapter-check span{flex:1}
+ .panel-collapse{margin-left:0}
+ `;
+ document.head.appendChild(style);
+ // Override all panel renderers after the original application render runs.
+ const priorRender=window.render;
+ if(typeof priorRender==='function')window.render=function(){priorRender();renderCurrentList();renderSavedList();renderGoalList();renderBookList()};
+ renderCurrentList();renderSavedList();renderGoalList();renderBookList();
+ // Remove legacy menu dropdowns and editing-only UI entirely.
+ document.querySelectorAll('.sf-menu-wrap,.sf-menu-pop,.legacy-panel-control,.panel-done-btn').forEach(x=>x.remove());
 })();
 </script>
 

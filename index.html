@@ -65,7 +65,7 @@ h1{font-size:21px;letter-spacing:1.4px;margin:0}.sub{font-size:12px;color:var(--
 <div class="field"><label>과목</label><select id="subject"><option>국어</option><option>영어</option><option>행정법</option><option>행정학</option><option>기타</option></select></div>
 <div class="field"><label>문제집</label><input id="book" autocomplete="off" placeholder="문제집 이름을 입력하거나 선택"><div class="choice-list" id="bookChoices"></div></div>
 <div class="field"><label>시작일</label><input id="start" type="date"></div><div class="field"><label>공부일 수</label><input id="duration" type="number" min="1" max="365" value="3"></div><div class="field full"><label>공부에서 제외할 요일</label><div class="weekpick" id="excludeDaysPicker"></div><span class="hint">선택한 요일은 공부일 수와 일정 기간 계산에서 제외돼요.</span></div><input id="excludeSunday" type="checkbox" checked hidden>
-<div class="field full"><label>단원 / 범위</label><input id="range" placeholder="예: 1단원 ~ 3단원"></div>
+<div class="field full"><label>단원 / 범위</label><input id="range" placeholder="예: 1단원 ~ 3단원"></div><div class="field full" id="scheduleTocField"><label>문제집 목차 연결</label><div id="scheduleTocPicker" class="chapter-options"><span class="hint">과목과 문제집을 선택하면 등록된 단원이 표시돼요.</span></div><span class="hint">일정에 연결한 단원은 회독 목표 진도에 반영돼요.</span></div>
 <div class="field full"><label>달력에 표시할 항목</label><div class="checkrow"><label><input id="showSubject" type="checkbox" checked> 과목</label><label><input id="showBook" type="checkbox" checked> 문제집</label><label><input id="showRange" type="checkbox" checked> 단원·범위</label></div></div>
 <div class="field"><label>색상</label><input id="color" type="color" value="#f5c7c4"></div><div class="field"><label>완료 여부</label><select id="done"><option value="false">진행 중</option><option value="true">완료</option></select></div>
 </div><div class="modalfoot"><button class="btn" id="deleteBtn" style="display:none">일정 삭제</button><div class="rightbuttons"><button class="btn" id="cancelBtn">취소</button><button class="btn primary" id="saveBtn">저장</button></div></div></div></div>
@@ -1196,6 +1196,100 @@ if(typeof openDay==='function'){
  renderCurrentList();renderSavedList();renderGoalList();renderBookList();
  // Remove legacy menu dropdowns and editing-only UI entirely.
  document.querySelectorAll('.sf-menu-wrap,.sf-menu-pop,.legacy-panel-control,.panel-done-btn').forEach(x=>x.remove());
+})();
+</script>
+
+
+<script>
+/* TOC-linked study tracking + goal progress synchronization */
+(function(){
+ const $=id=>document.getElementById(id);
+ const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+ const keyOf=(sub,book)=>sub+'::'+book;
+ const tocFor=(sub,book)=>data.bookDetails?.[keyOf(sub,book)]?.chapters||[];
+ const unitKey=(c,i)=>String(c.id??(c.name+'|'+(c.startPage||'')+'|'+(c.endPage||'')));
+ const selectedForTask=t=>Array.isArray(t.chapterKeys)?t.chapterKeys:[];
+ function renderScheduleToc(){
+   const sub=$('subject')?.value||'',book=$('book')?.value?.trim()||'',wrap=$('scheduleTocPicker');
+   if(!wrap)return;
+   const chapters=tocFor(sub,book);
+   if(!book||!chapters.length){wrap.innerHTML='<span class="hint">이 문제집에 등록된 목차가 없어요. 문제집 목록에서 목차를 먼저 등록해 주세요.</span>';return}
+   const old=selectedForTask(data.tasks.find(t=>t.id===editing)||{});
+   const chosen=new Set(old);
+   wrap.innerHTML=chapters.map((c,i)=>{const k=unitKey(c,i);return `<label class="chapter-check"><input type="checkbox" value="${esc(k)}" ${chosen.has(k)?'checked':''}><span>${esc(c.name)}</span><small>${c.startPage||'?'}~${c.endPage||'?'}쪽</small></label>`}).join('');
+   const update=()=>{const vals=[...wrap.querySelectorAll('input:checked')].map(x=>x.value);$('range').value=vals.map(k=>{let c=chapters.find((x,i)=>unitKey(x,i)===k);return c?`${c.name} (${c.startPage||'?'}~${c.endPage||'?'}쪽)`:''}).filter(Boolean).join(', ')};
+   wrap.querySelectorAll('input').forEach(x=>x.addEventListener('change',update));
+ }
+ $('subject')?.addEventListener('change',renderScheduleToc);
+ $('book')?.addEventListener('input',()=>setTimeout(renderScheduleToc,0));
+ const oldOpenNew=window.openNew,oldOpenEdit=window.openEdit;
+ if(typeof oldOpenNew==='function')window.openNew=function(...a){oldOpenNew(...a);setTimeout(renderScheduleToc,0)};
+ if(typeof oldOpenEdit==='function')window.openEdit=function(...a){oldOpenEdit(...a);setTimeout(renderScheduleToc,0)};
+ // The original functions are top-level declarations; expose wrappers by intercepting modal opening controls.
+ $('addBtn')?.addEventListener('click',()=>setTimeout(renderScheduleToc,0));$('saveBtn')?.addEventListener('click',()=>setTimeout(renderScheduleToc,0));
+ $('book')?.addEventListener('focus',()=>setTimeout(renderScheduleToc,0));$('bookChoices')?.addEventListener('click',()=>setTimeout(renderScheduleToc,0));
+ // Save chapter IDs on schedule save. Also auto-create a book catalogue entry for scheduled books.
+ const originalSaveTask=$('saveBtn').onclick;
+ $('saveBtn').onclick=function(){
+   const sub=$('subject').value,book=$('book').value.trim(),wrap=$('scheduleTocPicker');
+   const selected=wrap?[...wrap.querySelectorAll('input:checked')].map(x=>x.value):[];
+   const old=editing?data.tasks.find(t=>t.id===editing):null;
+   if(typeof originalSaveTask==='function')originalSaveTask.call(this);
+   const latest=editing?data.tasks.find(t=>t.id===editing):data.tasks[data.tasks.length-1];
+   if(latest){latest.chapterKeys=selected;latest.bookKey=keyOf(sub,book);save();syncGoalProgress();render();}
+ };
+ // Compute goal completion from completed scheduled chapter records, deduplicated by chapter per round.
+ function syncGoalProgress(){
+   Object.entries(data.goals||{}).forEach(([key,g])=>{
+     const toc=tocFor(g.subject,g.book),chosen=new Set(g.selectedChapters||toc.map((c,i)=>String(i)));
+     if(!toc.length)return;
+     const chosenKeys=toc.map((c,i)=>({c,i,k:unitKey(c,i)})).filter(x=>chosen.has(String(x.i))||chosen.has(x.k)).map(x=>x.k);
+     const completed=new Set();
+     data.tasks.filter(t=>keyOf(t.subject,t.book||'')===key).forEach(t=>{
+       const today=iso(new Date());const isDone=!!t.done||t.end<today||(Array.isArray(t.doneDates)&&t.doneDates.length>0);
+       if(!isDone)return;
+       (t.chapterKeys||[]).forEach(k=>{if(chosenKeys.includes(k))completed.add(k)});
+     });
+     const total=Math.max(1,chosenKeys.length);
+     const currentUnit=Math.min(total,completed.size);
+     g.units=total;g.currentUnit=currentUnit;
+     g.completedChapterKeys=[...completed];
+     if(currentUnit>=total&&total>0){g.currentRound=Math.min(Number(g.rounds)||1,Math.max(1,Number(g.currentRound)||1));}
+   });
+   save();
+ }
+ // Recompute when schedule completion toggles or goal opens.
+ const origRenderGoals=window.renderGoals;
+ if(typeof origRenderGoals==='function')window.renderGoals=function(){syncGoalProgress();origRenderGoals()};
+ // Goal picker: choose registered TOC units; if user changes chosen units, progress recalculates.
+ function renderGoalToc(){
+   const sub=$('goalSubject')?.value||'',book=$('goalBook')?.value?.trim()||'',wrap=$('goalChapterOptions');
+   if(!wrap)return;
+   const chapters=tocFor(sub,book);
+   if(!chapters.length){wrap.innerHTML='<span class="hint">등록된 문제집 목차가 없어요. 문제집 목록에서 단원을 먼저 등록해 주세요.</span>';return}
+   const goal=data.goals?.[keyOf(sub,book)],chosen=new Set(goal?.selectedChapters||chapters.map((c,i)=>String(i)));
+   wrap.innerHTML=chapters.map((c,i)=>`<label class="chapter-check"><input type="checkbox" value="${i}" ${chosen.has(String(i))?'checked':''}><span>${esc(c.name)}</span><small>${c.startPage||'?'}~${c.endPage||'?'}쪽</small></label>`).join('');
+   wrap.querySelectorAll('input').forEach(x=>x.addEventListener('change',()=>{$('goalUnits').value=wrap.querySelectorAll('input:checked').length||1}));
+ }
+ $('goalSubject')?.addEventListener('change',renderGoalToc);
+ $('goalBook')?.addEventListener('input',renderGoalToc);
+ const oldGoalOpen=window.openGoal;
+ if(typeof oldGoalOpen==='function')window.openGoal=function(...a){oldGoalOpen(...a);setTimeout(renderGoalToc,0)};
+ // Keep chapter count and selected units consistent when saving a goal.
+ const prevGoalSave=$('saveGoalBtn')?.onclick;
+ if($('saveGoalBtn'))$('saveGoalBtn').onclick=function(){
+   const sub=$('goalSubject').value,book=$('goalBook').value.trim(),wrap=$('goalChapterOptions'),chapters=tocFor(sub,book);
+   if(chapters.length&&wrap){const selected=[...wrap.querySelectorAll('input:checked')].map(x=>x.value);$('goalUnits').value=Math.max(1,selected.length);const k=keyOf(sub,book);if(data.goals[k])data.goals[k].selectedChapters=selected;}
+   if(typeof prevGoalSave==='function')prevGoalSave.call(this);
+   syncGoalProgress();render();
+ };
+ // If date-level completion changes, recompute goal progress after the existing action.
+ document.addEventListener('click',e=>{if(e.target.closest('[data-date-done]'))setTimeout(()=>{syncGoalProgress();renderGoals()},0)});
+ // Add page-range details to goal cards and progress based on scheduled chapters.
+ const goalList=$('goalList');
+ if(goalList){const obs=new MutationObserver(()=>{goalList.querySelectorAll('.goalrow').forEach(row=>{const b=row.querySelector('.goalhead b');if(!b||row.querySelector('.goal-pages'))return;const txt=b.textContent.split(' · '),k=keyOf(txt[0],txt.slice(1).join(' · ')),g=data.goals[k],d=data.bookDetails?.[k];if(!g||!d)return;const selected=new Set(g.selectedChapters||d.chapters.map((c,i)=>String(i)));const pages=d.chapters.filter((c,i)=>selected.has(String(i))).map(c=>c.startPage&&c.endPage?`${c.startPage}~${c.endPage}쪽`:c.name);const el=document.createElement('div');el.className='goal-pages';el.textContent='목표 범위: '+pages.join(', ');row.appendChild(el)})});obs.observe(goalList,{childList:true,subtree:true})}
+ const st=document.createElement('style');st.textContent='.goal-pages{font-size:11px;color:var(--muted);margin-top:5px;line-height:1.5}.chapter-options{display:grid;gap:5px;max-height:220px;overflow:auto;padding:8px;border:1px solid var(--line);border-radius:9px}.chapter-check{display:flex;align-items:center;gap:8px;padding:5px 0;font-size:12px}.chapter-check span{flex:1}';document.head.appendChild(st);
+ syncGoalProgress();
 })();
 </script>
 

@@ -1339,4 +1339,128 @@ if(typeof openDay==='function'){
  syncLinkedGoals();
 })();
 </script>
+
+<script>
+/* STUDY FLOW: single source-of-truth synchronization layer */
+(function(){
+  const $=id=>document.getElementById(id);
+  const bookKey=(subject,book)=>`${subject}::${book||''}`;
+  const chapterKey=(c,i)=>String(c.id??(`${c.name}|${c.startPage||''}|${c.endPage||''}`));
+  const todayKey=()=>typeof iso==='function'?iso(new Date()):new Date().toISOString().slice(0,10);
+  const chaptersFor=(s,b)=>data.bookDetails?.[bookKey(s,b)]?.chapters||[];
+  const normalizeText=s=>String(s||'').replace(/\s/g,'').toLowerCase();
+  function migrateTaskLinks(t){
+    const ch=chaptersFor(t.subject,t.book);
+    if(!ch.length)return;
+    if(!Array.isArray(t.chapterKeys)||!t.chapterKeys.length){
+      const r=normalizeText(t.range);
+      if(r){
+        const found=ch.map((c,i)=>({c,i,k:chapterKey(c,i)})).filter(x=>r.includes(normalizeText(x.c.name))||normalizeizePageMatch(r,x.c));
+        if(found.length)t.chapterKeys=found.map(x=>x.k);
+      }
+    }
+    t.bookKey=bookKey(t.subject,t.book);
+    if(t.showPages===undefined)t.showPages=true;
+  }
+  function normalizeizePageMatch(range,c){
+    if(!c.startPage||!c.endPage)return false;
+    const compact=String(range).replace(/\s/g,'');
+    return compact.includes(`${c.startPage}~${c.endPage}`)||compact.includes(`${c.startPage}-${c.endPage}`)||compact.includes(`${c.startPage}~${c.endPage}쪽`);
+  }
+  function syncGoals(){
+    if(!data||!data.goals)return;
+    const today=todayKey();
+    Object.entries(data.goals).forEach(([k,g])=>{
+      const chapters=chaptersFor(g.subject,g.book);
+      if(!chapters.length)return;
+      const selected=new Set((g.selectedChapters?.length?g.selectedChapters:chapters.map((_,i)=>String(i))).map(String));
+      const rows=chapters.map((c,i)=>({c,i,key:chapterKey(c,i)})).filter(x=>selected.has(String(x.i))||selected.has(x.key));
+      if(!rows.length)return;
+      const total=rows.length,baseRound=Math.max(1,Number(g.baseRound||g.startRound||g.currentRound)||1);
+      const perRound=new Map();
+      data.tasks.filter(t=>bookKey(t.subject,t.book)===k).forEach(t=>{
+        migrateTaskLinks(t);
+        // Calendar date passing is the automatic completion trigger; manual done is also accepted.
+        const passed=!!t.end && t.end<today;
+        const manuallyDone=!!t.done;
+        const round=Math.max(1,Number(t.roundNumber)||baseRound);
+        if(!passed&&!manuallyDone)return;
+        if(!perRound.has(round))perRound.set(round,new Set());
+        const set=perRound.get(round);
+        (t.chapterKeys||[]).forEach(ck=>{if(rows.some(x=>x.key===String(ck)))set.add(String(ck));});
+      });
+      // Count only complete rounds in sequence; a later round cannot leapfrog an unfinished one.
+      let completedRounds=0,activeSet=new Set(),round=baseRound;
+      while(round<=Math.max(baseRound,...perRound.keys(),baseRound)+1){
+        const set=perRound.get(round)||new Set();
+        if(set.size>=total){completedRounds++;round++;continue;}
+        activeSet=set;break;
+      }
+      const ordered=rows.map(x=>x.key).filter(x=>activeSet.has(x));
+      const currentRound=Math.min(Math.max(1,Number(g.rounds)||1),baseRound+completedRounds);
+      g.units=total;
+      g.currentRound=currentRound;
+      g.currentUnit=ordered.length;
+      g.completedChapterKeys=ordered;
+      const last=rows.find(x=>x.key===ordered[ordered.length-1]);
+      g.currentChapterName=last?last.c.name:(completedRounds?'한 회독 완료':(g.currentUnitText||'시작 전'));
+      g.linkedProgressUpdatedAt=today;
+    });
+    save();
+  }
+  function refresh(){
+    syncGoals();
+    if(typeof window.render==='function')window.render();
+    else if(typeof render==='function')render();
+  }
+  // Capture the exact selected TOC rows before the legacy save handler closes the modal/reset state.
+  const saveTask=$('saveBtn');
+  if(saveTask){
+    saveTask.addEventListener('click',()=>{
+      const wrap=$('scheduleTocPicker');
+      window.__sfScheduleDraft={
+        editingId:typeof editing!=='undefined'?editing:null,
+        subject:$('subject')?.value||'',book:$('book')?.value?.trim()||'',
+        chapterKeys:wrap?[...wrap.querySelectorAll('input:checked')].map(x=>x.value):[],
+        roundNumber:Math.max(1,Number($('roundNumber')?.value)||1),
+        showPages:$('showPages')?.checked!==false
+      };
+    },true);
+    saveTask.addEventListener('click',()=>{
+      const d=window.__sfScheduleDraft;if(!d)return;
+      let task=d.editingId?data.tasks.find(t=>t.id===d.editingId):null;
+      if(!task){task=[...data.tasks].reverse().find(t=>t.subject===d.subject&&t.book===d.book);}
+      if(task){task.chapterKeys=d.chapterKeys;task.bookKey=bookKey(d.subject,d.book);task.roundNumber=d.roundNumber;task.showPages=d.showPages;}
+      window.__sfScheduleDraft=null;save();refresh();
+    });
+  }
+  // Saving/deleting goals refreshes the linked state immediately.
+  $('saveGoalBtn')?.addEventListener('click',()=>setTimeout(()=>{
+    const k=bookKey($('goalSubject')?.value,$('goalBook')?.value?.trim());
+    const g=data.goals?.[k];if(g){g.baseRound=Math.max(1,Number(g.baseRound||g.startRound||g.currentRound)||1);}
+    syncGoals();if(typeof window.render==='function')window.render();
+  },0));
+  $('deleteGoalBtn')?.addEventListener('click',()=>setTimeout(refresh,0));
+  // A deleted/edited schedule must also recalculate the goal.
+  $('deleteBtn')?.addEventListener('click',()=>setTimeout(refresh,0));
+  document.addEventListener('click',e=>{
+    if(e.target.closest('[data-date-done]'))setTimeout(refresh,0);
+    if(e.target.closest('[data-goal-key]'))setTimeout(refresh,0);
+  });
+  // Recalculate whenever the app is opened, brought back to foreground, or the date changes at midnight.
+  document.addEventListener('visibilitychange',()=>{if(!document.hidden)refresh()});
+  window.addEventListener('focus',refresh);
+  let lastDate=todayKey();setInterval(()=>{const now=todayKey();if(now!==lastDate){lastDate=now;refresh();}},30000);
+  // Ensure every renderer call uses the latest goal state, without stacking more wrappers.
+  const baseRender=window.render;
+  if(typeof baseRender==='function'&&!baseRender.__sfLinked){
+    const wrapped=function(){syncGoals();return baseRender.apply(this,arguments)};
+    wrapped.__sfLinked=true;window.render=wrapped;
+  }
+  data.tasks.forEach(migrateTaskLinks);
+  syncGoals();
+  if(typeof window.render==='function')window.render();
+})();
+</script>
+
 </body></html>

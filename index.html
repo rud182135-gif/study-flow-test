@@ -1463,4 +1463,178 @@ if(typeof openDay==='function'){
 })();
 </script>
 
+
+<script>
+/* STUDY FLOW live UI + subject and chapter selector consolidation */
+(function(){
+  const $=id=>document.getElementById(id);
+  if(typeof data==='undefined')return;
+  data.customSubjects=Array.isArray(data.customSubjects)?data.customSubjects:[];
+  const defaults=['국어','영어','한국사','행정법','행정학','기타'];
+  const subjectIds=['subject','goalSubject','bmSubject'];
+  let currentExpandedLocal=false,refreshing=false,pending=false;
+
+  function refreshSubjects(){
+    subjectIds.forEach(id=>{
+      const el=$(id);if(!el)return;
+      const current=el.value;
+      const values=[...new Set([...defaults,...data.customSubjects])];
+      if(current&&!values.includes(current))values.push(current);
+      el.innerHTML=values.map(v=>`<option value="${escHtml(v)}">${escHtml(v)}</option>`).join('');
+      if(values.includes(current))el.value=current;
+    });
+  }
+  function addSubject(){
+    const raw=prompt('추가할 과목명을 입력해 주세요.');if(raw===null)return;
+    const name=raw.trim();
+    if(!name){showToast('과목명을 입력해 주세요.');return}
+    if(name.length>20){showToast('과목명은 20자 이내로 입력해 주세요.');return}
+    if(defaults.includes(name)||data.customSubjects.includes(name)){showToast('이미 등록된 과목이에요.');return}
+    data.customSubjects.push(name);if(!palette[name])palette[name]='#c9c9c9';
+    refreshSubjects();subjectIds.forEach(id=>{if($(id))$(id).value=name});
+    save();refreshAll();showToast('과목을 추가했어요.');
+  }
+  function removeSubject(){
+    const list=data.customSubjects||[];
+    if(!list.length){showToast('삭제할 사용자 등록 과목이 없어요.');return}
+    const raw=prompt('삭제할 과목명을 정확히 입력해 주세요.\n등록 과목: '+list.join(', '));
+    if(raw===null)return;const name=raw.trim();
+    if(!list.includes(name)){showToast('등록된 사용자 과목에서 찾을 수 없어요.');return}
+    if(!confirm(`'${name}' 과목을 선택 목록에서 제거할까요?\n기존 일정·목표·문제집 기록은 삭제하지 않고 보존합니다.`))return;
+    data.customSubjects=list.filter(x=>x!==name);
+    subjectIds.forEach(id=>{if($(id)?.value===name)$(id).value=defaults[0]});
+    refreshSubjects();save();refreshAll();showToast('과목을 선택 목록에서 제거했어요. 기존 기록은 보존됩니다.');
+  }
+  function installSubjectControls(){
+    subjectIds.forEach(id=>{
+      const select=$(id);if(!select)return;
+      const parent=select.parentElement;
+      parent.querySelectorAll('.sf-subject-actions').forEach(x=>x.remove());
+      parent.querySelectorAll('button').forEach(b=>{if((b.textContent||'').includes('과목 추가'))b.remove()});
+      const actions=document.createElement('div');actions.className='sf-subject-actions';
+      actions.style.cssText='display:flex;gap:6px;margin-top:6px;flex-wrap:wrap';
+      actions.innerHTML='<button type="button" class="btn small">＋ 과목 추가</button><button type="button" class="btn small">− 과목 제거</button>';
+      actions.children[0].onclick=addSubject;actions.children[1].onclick=removeSubject;
+      select.insertAdjacentElement('afterend',actions);
+    });
+  }
+
+  // Current schedule panel: exactly three rows initially, with an explicit expand/collapse toggle.
+  function renderCurrentThree(){
+    const list=$('currentList');if(!list)return;
+    const order=data.settings?.taskOrder||[];
+    const arr=[...data.tasks].sort((a,b)=>{
+      const i=order.indexOf(a.id),j=order.indexOf(b.id);
+      return (i<0?9999:i)-(j<0?9999:j);
+    });
+    const shown=currentExpandedLocal?arr:arr.slice(0,3);
+    list.dataset.totalCount=arr.length;list.dataset.visibleCount=shown.length;
+    list.innerHTML=shown.map(t=>`<div class="sf-list-row savedrow" data-task-id="${escHtml(t.id)}"><div class="desc"><b>${escHtml(t.subject)} · ${escHtml(t.book||'문제집 미입력')}</b><br><span class="hint">${escHtml(t.start)} ~ ${escHtml(t.end)} · ${t.duration||1}일</span></div></div>`).join('')||'<div class="empty">현재 적용 중인 일정이 없습니다.</div>';
+    list.querySelectorAll('[data-task-id]').forEach(row=>{
+      row.addEventListener('click',()=>openEdit(row.dataset.taskId));
+    });
+    let btn=$('currentListMoreBottom');
+    if(!btn){btn=document.createElement('button');btn.id='currentListMoreBottom';btn.className='btn small panel-more-bottom';list.after(btn)}
+    btn.textContent=currentExpandedLocal?'접기':'더보기';
+    btn.style.display=arr.length>3?'':'none';
+    btn.onclick=()=>{currentExpandedLocal=!currentExpandedLocal;renderCurrentThree()};
+  }
+
+  // Goal current-unit selection is sourced from the registered TOC, not typed manually.
+  function renderGoalChapters(){
+    const subject=$('goalSubject')?.value||'',book=$('goalBook')?.value?.trim()||'';
+    const key=`${subject}::${book}`,chapters=data.bookDetails?.[key]?.chapters||[];
+    const wrap=$('goalChapterOptions');if(!wrap)return;
+    if(!chapters.length){
+      wrap.innerHTML='<span class="hint">등록된 목차가 없어요. 문제집 목록에서 목차를 먼저 등록해 주세요.</span>';
+      setCurrentUnitField(false,[]);
+      return;
+    }
+    const saved=data.goals?.[key];
+    const chosen=new Set((saved?.selectedChapters?.length?saved.selectedChapters:chapters.map((_,i)=>String(i))).map(String));
+    wrap.innerHTML=chapters.map((c,i)=>`<label class="chapter-check"><input type="checkbox" value="${i}" ${chosen.has(String(i))?'checked':''}><span>${escHtml(c.name)}</span><small>${c.startPage||'?'}~${c.endPage||'?'}쪽</small></label>`).join('');
+    wrap.querySelectorAll('input').forEach(x=>x.addEventListener('change',()=>updateCurrentUnitOptions(chapters)));
+    updateCurrentUnitOptions(chapters);
+  }
+  function setCurrentUnitField(hasToc,chapters){
+    const old=$('goalCurrentUnit');if(!old)return;
+    if(!hasToc){
+      if(old.tagName==='SELECT'){
+        const input=document.createElement('input');input.id='goalCurrentUnit';input.type='text';input.inputMode='text';input.placeholder='예: 2단원';input.value=old.value||'0';old.replaceWith(input);
+      }
+      return;
+    }
+    if(old.tagName!=='SELECT'){
+      const select=document.createElement('select');select.id='goalCurrentUnit';select.className=old.className||'';old.replaceWith(select);
+    }
+  }
+  function updateCurrentUnitOptions(chapters){
+    const wrap=$('goalChapterOptions'),old=$('goalCurrentUnit');if(!wrap||!old)return;
+    const selected=[...wrap.querySelectorAll('input:checked')].map(x=>Number(x.value)).filter(i=>chapters[i]);
+    const previous=Math.max(0,Number(old.value)||0);
+    setCurrentUnitField(true,selected);
+    const select=$('goalCurrentUnit');if(!select)return;
+    select.innerHTML='<option value="0">시작 전</option>'+selected.map((idx,n)=>`<option value="${n+1}">${escHtml(chapters[idx].name)}까지 완료</option>`).join('');
+    select.value=String(Math.min(selected.length,previous));
+    $('goalUnits').value=Math.max(1,selected.length);
+  }
+  const originalOpenGoal=window.openGoal;
+  if(typeof originalOpenGoal==='function'&&!originalOpenGoal.__sfSubjectChapter){
+    const wrapped=function(key){
+      const result=originalOpenGoal.apply(this,arguments);
+      setTimeout(()=>{refreshSubjects();if(key&&data.goals?.[key])$('goalSubject').value=data.goals[key].subject;renderGoalChapters()},0);
+      return result;
+    };
+    wrapped.__sfSubjectChapter=true;window.openGoal=wrapped;
+  }
+  $('goalSubject')?.addEventListener('change',()=>setTimeout(renderGoalChapters,0));
+  $('goalBook')?.addEventListener('input',()=>setTimeout(renderGoalChapters,0));
+  const originalOpenEdit=window.openEdit;
+  if(typeof originalOpenEdit==='function'&&!originalOpenEdit.__sfSubjectOption){
+    const wrapped=function(id){
+      const result=originalOpenEdit.apply(this,arguments);
+      const t=data.tasks.find(x=>x.id===id);
+      if(t){refreshSubjects();const el=$('subject');if(el&&!Array.from(el.options).some(o=>o.value===t.subject))el.add(new Option(t.subject,t.subject));if(el)el.value=t.subject}
+      return result;
+    };
+    wrapped.__sfSubjectOption=true;window.openEdit=wrapped;
+  }
+
+  // Any successful save schedules a complete visual refresh; a guard prevents recursive saves during rendering.
+  function refreshAll(){
+    if(refreshing)return;
+    refreshing=true;
+    try{
+      refreshSubjects();
+      if(typeof window.render==='function')window.render();
+      renderCurrentThree();
+      installSubjectControls();
+    }catch(e){console.error('STUDY FLOW live refresh failed',e)}
+    finally{refreshing=false}
+  }
+  const oldSave=window.save;
+  if(typeof oldSave==='function'&&!oldSave.__sfRefreshAfterSave){
+    const wrapped=function(){
+      const result=oldSave.apply(this,arguments);
+      if(!refreshing&&!pending){
+        pending=true;
+        Promise.resolve().then(()=>{pending=false;refreshAll()});
+      }
+      return result;
+    };
+    wrapped.__sfRefreshAfterSave=true;window.save=wrapped;
+  }
+  const oldRender=window.render;
+  if(typeof oldRender==='function'&&!oldRender.__sfRenderPanels){
+    const wrapped=function(){
+      const result=oldRender.apply(this,arguments);
+      if(!refreshing)renderCurrentThree();
+      return result;
+    };
+    wrapped.__sfRenderPanels=true;window.render=wrapped;
+  }
+  refreshSubjects();installSubjectControls();refreshAll();
+})();
+</script>
+
 </body></html>

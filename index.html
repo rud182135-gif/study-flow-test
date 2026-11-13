@@ -66,7 +66,7 @@ h1{font-size:21px;letter-spacing:1.4px;margin:0}.sub{font-size:12px;color:var(--
 <div class="field"><label>문제집</label><input id="book" autocomplete="off" placeholder="문제집 이름을 입력하거나 선택"><div class="choice-list" id="bookChoices"></div></div>
 <div class="field"><label>시작일</label><input id="start" type="date"></div><div class="field"><label>공부일 수</label><input id="duration" type="number" min="1" max="365" value="3"></div><div class="field full"><label>공부에서 제외할 요일</label><div class="weekpick" id="excludeDaysPicker"></div><span class="hint">선택한 요일은 공부일 수와 일정 기간 계산에서 제외돼요.</span></div><input id="excludeSunday" type="checkbox" checked hidden>
 <div class="field full"><label>단원 / 범위</label><input id="range" placeholder="예: 1단원 ~ 3단원"></div><div class="field full" id="scheduleTocField"><label>문제집 목차 연결</label><div id="scheduleTocPicker" class="chapter-options"><span class="hint">과목과 문제집을 선택하면 등록된 단원이 표시돼요.</span></div><span class="hint">일정에 연결한 단원은 회독 목표 진도에 반영돼요.</span></div>
-<div class="field full"><label>달력에 표시할 항목</label><div class="checkrow"><label><input id="showSubject" type="checkbox" checked> 과목</label><label><input id="showBook" type="checkbox" checked> 문제집</label><label><input id="showRange" type="checkbox" checked> 단원·범위</label></div></div>
+<div class="field full"><label>달력에 표시할 항목</label><div class="checkrow"><label><input id="showSubject" type="checkbox" checked> 과목</label><label><input id="showBook" type="checkbox" checked> 문제집</label><label><input id="showRange" type="checkbox" checked> 단원·범위</label><label><input id="showPages" type="checkbox" checked> 페이지</label></div></div>
 <div class="field"><label>색상</label><input id="color" type="color" value="#f5c7c4"></div><div class="field"><label>완료 여부</label><select id="done"><option value="false">진행 중</option><option value="true">완료</option></select></div>
 </div><div class="modalfoot"><button class="btn" id="deleteBtn" style="display:none">일정 삭제</button><div class="rightbuttons"><button class="btn" id="cancelBtn">취소</button><button class="btn primary" id="saveBtn">저장</button></div></div></div></div>
 <div class="modalback" id="dayBack"><div class="modal"><h2 id="dayTitle">날짜 일정</h2><div id="dayItems" class="dateitems"></div><div class="modalfoot"><button class="btn" id="dayAdd">＋ 이 날짜에 일정 추가</button><div class="rightbuttons"><button class="btn" id="deleteDayBtn" style="color:#b42318;border-color:#efc7c4">이 날짜 전체 삭제</button><button class="btn" id="dayClose">닫기</button></div></div></div></div>
@@ -129,7 +129,7 @@ function render(){
  for(let i=0;i<42;i++){let d=new Date(start);d.setDate(start.getDate()+i);let key=iso(d),cell=document.createElement('div');cell.className='day'+(d.getMonth()!==view.getMonth()?' other':'')+(d.getDay()===0?' sunday':'')+(key===today?' today':'');cell.dataset.date=key;
  cell.innerHTML=`<div class="num">${d.getDate()}</div>${d.getDay()===0?'<span class="rest">휴식</span>':''}`;
  data.tasks.filter(t=>isActive(t,key)).forEach(t=>{let el=document.createElement('div');el.className='task'+(t.done?' done':'');el.style.setProperty('--c',t.color||palette[t.subject]||'#ccc');el.style.background=(t.color||palette[t.subject]||'#ccc')+'66';el.dataset.id=t.id;el.dataset.date=key;
- let labels=[];if(t.showSubject!==false)labels.push(esc(t.subject));if(t.showBook!==false&&t.book)labels.push(esc(t.book));let title=labels.join(' · ');if(t.showRange!==false&&t.range)title+=(title?' / ':'')+esc(t.range);el.innerHTML=`<span>${title||'일정'}</span>${key===t.end?'<span class="grip" title="기간 조절">⋮</span>':''}`;
+ let labels=[];if(t.showSubject!==false)labels.push(esc(t.subject));if(t.showBook!==false&&t.book)labels.push(esc(t.book));let title=labels.join(' · ');if(t.showRange!==false&&t.range)title+=(title?' / ':'')+esc(t.range);if(t.showPages!==false&&Array.isArray(t.chapterKeys)&&t.chapterKeys.length){let bd=data.bookDetails?.[bookKey(t.subject,t.book||'')],pages=(bd?.chapters||[]).filter((c,i)=>t.chapterKeys.includes(String(c.id??(c.name+'|'+(c.startPage||'')+'|'+(c.endPage||''))))).map(c=>c.startPage&&c.endPage?`${c.startPage}~${c.endPage}쪽`: '').filter(Boolean);if(pages.length)title+=(title?' · ':'')+esc(pages.join(', '));}el.innerHTML=`<span>${title||'일정'}</span>${key===t.end?'<span class="grip" title="기간 조절">⋮</span>':''}`;
  el.addEventListener('click',e=>{e.stopPropagation();if(!el.dataset.suppress)openEdit(t.id)});el.addEventListener('pointerdown',startGesture);cell.appendChild(el)});
  cell.addEventListener('click',()=>openDay(key));days.appendChild(cell)}
  const month=iso(new Date(view.getFullYear(),view.getMonth(),1)).slice(0,7);
@@ -142,14 +142,14 @@ function renderBooks(){let names=Object.keys(data.books);$('bookList').innerHTML
 function renderSaved(){let arr=[...data.tasks].sort((a,b)=>b.start.localeCompare(a.start));$('savedList').innerHTML=arr.length?arr.map(t=>`<div class="savedrow"><div class="desc"><b>${esc(t.subject)} · ${esc(t.book||'문제집 미입력')}</b><br></div><div class="savedactions"><button class="btn small" data-reuse="${esc(t.id)}">다시 등록</button></div></div>`).join(''):'<div class="empty">등록한 일정이 여기에 저장돼요.</div>';
  $('savedList').querySelectorAll('[data-reuse]').forEach(b=>b.onclick=()=>reuseTask(b.dataset.reuse))}
 function nextAvailableStart(){if(!data.tasks.length)return iso(new Date());let latest=data.tasks.reduce((m,t)=>t.end>m?t.end:m,data.tasks[0].end);let next=addDays(latest,1);return next}
-function openNew(date=nextAvailableStart()){editing=null;$('modalTitle').textContent='일정 추가';$('deleteBtn').style.display='none';$('subject').value='국어';$('book').value='';$('start').value=date;$('duration').value=3;$('excludeSunday').checked=true;$('range').value='';$('showSubject').checked=true;$('showBook').checked=true;$('showRange').checked=true;$('color').value=palette.국어;$('done').value='false';$('bookChoices').classList.remove('show');$('modalback').classList.add('show')}
-function openEdit(id){let t=data.tasks.find(x=>x.id===id);if(!t)return;editing=id;$('modalTitle').textContent='일정 수정';$('deleteBtn').style.display='block';$('subject').value=t.subject;$('book').value=t.book||'';$('start').value=t.start;$('duration').value=t.duration||workCount(t.start,t.end,!!t.excludeSunday);$('excludeSunday').checked=t.excludeSunday!==false;$('range').value=t.range||'';$('showSubject').checked=t.showSubject!==false;$('showBook').checked=t.showBook!==false;$('showRange').checked=t.showRange!==false;$('color').value=t.color||palette[t.subject]||'#cccccc';$('done').value=String(!!t.done);$('bookChoices').classList.remove('show');$('modalback').classList.add('show')}
+function openNew(date=nextAvailableStart()){editing=null;$('modalTitle').textContent='일정 추가';$('deleteBtn').style.display='none';$('subject').value='국어';$('book').value='';$('start').value=date;$('duration').value=3;$('excludeSunday').checked=true;$('range').value='';$('showSubject').checked=true;$('showBook').checked=true;$('showRange').checked=true;$('showPages').checked=true;$('color').value=palette.국어;$('done').value='false';$('bookChoices').classList.remove('show');$('modalback').classList.add('show')}
+function openEdit(id){let t=data.tasks.find(x=>x.id===id);if(!t)return;editing=id;$('modalTitle').textContent='일정 수정';$('deleteBtn').style.display='block';$('subject').value=t.subject;$('book').value=t.book||'';$('start').value=t.start;$('duration').value=t.duration||workCount(t.start,t.end,!!t.excludeSunday);$('excludeSunday').checked=t.excludeSunday!==false;$('range').value=t.range||'';$('showSubject').checked=t.showSubject!==false;$('showBook').checked=t.showBook!==false;$('showRange').checked=t.showRange!==false;$('showPages').checked=t.showPages!==false;$('color').value=t.color||palette[t.subject]||'#cccccc';$('done').value=String(!!t.done);$('bookChoices').classList.remove('show');$('modalback').classList.add('show')}
 function closeModal(){$('modalback').classList.remove('show')}
 function openDay(key){selectedDay=key;let d=fromISO(key);$('dayTitle').textContent=`${d.getFullYear()}년 ${d.getMonth()+1}월 ${d.getDate()}일${d.getDay()===0?' · 휴식일':''}`;
  let tasks=data.tasks.filter(t=>isActive(t,key));$('dayItems').innerHTML=tasks.length?tasks.map(t=>{let done=!!t.done||(t.doneDates||[]).includes(key);return `<div class="dateitem"><span><b>${esc(t.subject)} · ${esc(t.book||'')}</b><br>${esc(t.range||'범위 없음')}<br><small class="${done?'done-date':'muted-date'}">${done?'완료':'미완료'}</small></span><div class="row-actions"><button class="btn small" data-date-done="${esc(t.id)}">${done?'완료 취소':'이 날짜 완료'}</button><button class="btn small" data-skip="${esc(t.id)}">이 날 제외</button></div></div>`}).join(''):'<div class="empty">이 날짜에 등록된 일정이 없어요.</div>';
  $('dayItems').querySelectorAll('[data-skip]').forEach(b=>b.onclick=()=>skipOneDay(b.dataset.skip,key));$('dayItems').querySelectorAll('[data-date-done]').forEach(b=>b.onclick=()=>{let t=data.tasks.find(x=>x.id===b.dataset.dateDone);if(!t)return;t.doneDates=t.doneDates||[];if(t.doneDates.includes(key))t.doneDates=t.doneDates.filter(x=>x!==key);else t.doneDates.push(key);save();openDay(key);render()});$('dayBack').classList.add('show')}
 function skipOneDay(id,key){let t=data.tasks.find(x=>x.id===id);if(!t)return;if(!confirm('이 일정에서 선택한 하루를 제외할까요?'))return;t.skipDates=[...(t.skipDates||[]),key];t.skipDates=[...new Set(t.skipDates)];t.duration=Math.max(1,(t.duration||workCount(t.start,t.end,!!t.excludeSunday))-1);save();$('dayBack').classList.remove('show');render();showToast('선택한 날짜를 일정에서 제외했어요.')}
-function reuseTask(id){let t=data.tasks.find(x=>x.id===id);if(!t)return;openNew();$('subject').value=t.subject;$('book').value=t.book||'';$('duration').value=t.duration||3;$('excludeSunday').checked=t.excludeSunday!==false;$('range').value=t.range||'';$('showSubject').checked=t.showSubject!==false;$('showBook').checked=t.showBook!==false;$('showRange').checked=t.showRange!==false;$('color').value=t.color||palette[t.subject]||'#cccccc';$('done').value='false';showToast('기존 일정 내용을 불러왔어요. 시작일을 확인하고 저장하세요.')}
+function reuseTask(id){let t=data.tasks.find(x=>x.id===id);if(!t)return;openNew();$('subject').value=t.subject;$('book').value=t.book||'';$('duration').value=t.duration||3;$('excludeSunday').checked=t.excludeSunday!==false;$('range').value=t.range||'';$('showSubject').checked=t.showSubject!==false;$('showBook').checked=t.showBook!==false;$('showRange').checked=t.showRange!==false;$('showPages').checked=t.showPages!==false;$('color').value=t.color||palette[t.subject]||'#cccccc';$('done').value='false';showToast('기존 일정 내용을 불러왔어요. 시작일을 확인하고 저장하세요.')}
 function cascadeAfter(anchor){let later=data.tasks.filter(t=>t.id!==anchor.id&&t.start>=anchor.start).sort((a,b)=>a.start.localeCompare(b.start));let cursor=anchor.end;
  for(let t of later){if(t.start<=cursor){let dur=Math.max(1,t.duration||workCount(t.start,t.end,!!t.excludeSunday));t.start=addDays(cursor,1);while(excluded(t).includes(fromISO(t.start).getDay()))t.start=addDays(t.start,1);t.end=workEnd(t.start,dur,!!t.excludeSunday);t.skipDates=(t.skipDates||[]).filter(x=>x<t.start||x>t.end);cursor=t.end}else if(t.end>cursor){cursor=t.end}}
 }
@@ -173,7 +173,7 @@ $('backup').onclick=()=>{let blob=new Blob([JSON.stringify(data,null,2)],{type:'
 $('restoreBtn').onclick=()=>$('restoreFile').click();$('restoreFile').onchange=async e=>{let f=e.target.files[0];if(!f)return;try{let x=JSON.parse(await f.text());if(!x||!Array.isArray(x.tasks)||typeof x.books!=='object')throw Error();data={tasks:x.tasks.map(t=>({...t,skipDates:Array.isArray(t.skipDates)?t.skipDates:[],doneDates:Array.isArray(t.doneDates)?t.doneDates:[],showSubject:t.showSubject!==false,showBook:t.showBook!==false,showRange:t.showRange!==false})),books:x.books||{},goals:x.goals||{},settings:x.settings||{},hiddenBooks:x.hiddenBooks||[],hiddenSaved:x.hiddenSaved||[],bookDetails:x.bookDetails||{},customSubjects:x.customSubjects||[]};normalize();save();render();showToast('백업 데이터를 복원했어요.')}catch(err){showToast('올바른 백업 파일이 아닙니다.')}e.target.value=''};
 
 function renderGoals(){let entries=Object.entries(data.goals||{});$('goalList').innerHTML=entries.length?entries.map(([k,g])=>{let total=Math.max(1,Number(g.units)||1),target=Math.max(1,Number(g.rounds)||1),r=Math.max(1,Number(g.currentRound)||1),u=Math.max(0,Math.min(total,Number(g.currentUnit)||0)),done=Math.min(target*total,Math.max(0,(r-1)*total+u)),pct=Math.round(done/(target*total)*100),remaining=Math.max(0,target-Math.floor(done/total));return `<div class="goalrow"><div class="goalhead"><b>${esc(g.subject)} · ${esc(g.book)}</b><button class="btn small" data-editgoal="${esc(k)}">진도 수정</button></div><div class="goalbar"><span style="width:${pct}%"></span></div><div class="goalmeta">현재 ${r}회독 ${u}단원 · 목표 ${target}회독 · ${pct}% 진행</div><div class="goalmeta">${remaining===0?'목표 달성!':`남은 회독 ${remaining}회${u===total?' (다음 회독부터 시작)':` · 다음: ${r}회독 ${u+1}단원`}`}</div></div>`}).join(''):'<div class="empty">문제집별 회독 목표를 설정할 수 있어요.</div>';$('goalList').querySelectorAll('[data-editgoal]').forEach(b=>openGoal(b.dataset.editgoal))}
-function openGoal(key=null){editingGoal=key;let g=key?data.goals[key]:null;$('goalModalTitle').textContent=g?'회독 목표 및 진도 수정':'회독 목표 설정';$('deleteGoalBtn').style.display=g?'block':'none';$('goalSubject').value=g?.subject||'행정법';$('goalBook').value=g?.book||'';$('goalUnits').value=g?.units||6;$('goalRounds').value=g?.rounds||5;$('goalCurrentRound').value=g?.currentRound||1;$('goalCurrentUnit').value=g?.currentUnit??0;$('goalBack').classList.add('show')}
+function openGoal(key=null){editingGoal=key;let g=key?data.goals[key]:null;$('goalModalTitle').textContent=g?'회독 목표 및 진도 수정':'회독 목표 설정';$('deleteGoalBtn').style.display=g?'block':'none';$('goalSubject').value=g?.subject||'행정법';$('goalBook').value=g?.book||'';$('goalUnits').value=g?.units||6;$('goalRounds').value=g?.rounds||5;$('goalCurrentRound').value=g?.currentRound||1;$('goalCurrentUnit').value=g?.currentChapterName||g?.currentUnitText||(g?.currentUnit??0);$('goalBack').classList.add('show')}
 $('addGoalBtn').onclick=()=>openGoal();$('cancelGoalBtn').onclick=()=>$('goalBack').classList.remove('show');$('saveGoalBtn').onclick=()=>{let subject=$('goalSubject').value,book=$('goalBook').value.trim(),units=Math.max(1,Number($('goalUnits').value)||1),rounds=Math.max(1,Number($('goalRounds').value)||1),currentRound=Math.max(1,Number($('goalCurrentRound').value)||1),currentUnit=Math.max(0,Math.min(units,Number($('goalCurrentUnit').value)||0));if(!book){showToast('문제집 이름을 입력해 주세요.');return}let key=bookKey(subject,book);data.goals[key]={subject,book,units,rounds,currentRound,currentUnit};save();$('goalBack').classList.remove('show');renderGoals();showToast('회독 목표를 저장했어요.')};$('deleteGoalBtn').onclick=()=>{if(editingGoal&&confirm('이 회독 목표를 삭제할까요?')){delete data.goals[editingGoal];save();$('goalBack').classList.remove('show');renderGoals()}};
 
 
@@ -1151,8 +1151,8 @@ if(typeof openDay==='function'){
    const entries=Object.entries(data.goals||{}),shown=goalExpanded?entries:entries.slice(0,3),list=$('goalList');
    list.dataset.totalCount=entries.length;list.dataset.visibleCount=shown.length;
    list.innerHTML=shown.map(([k,g])=>{
-     const total=Math.max(1,Number(g.units)||1),target=Math.max(1,Number(g.rounds)||1),r=Math.max(1,Number(g.currentRound)||1),u=Math.max(0,Math.min(total,Number(g.currentUnit)||0)),done=Math.min(target*total,Math.max(0,(r-1)*total+u)),pct=Math.round(done/(target*total)*100);
-     return `<div class="sf-list-row goalrow" data-goal-key="${escHtml(k)}" style="--goal-color:${g.color||palette[g.subject]||'#7183b5'}"><div class="goalhead"><b>${escHtml(g.subject)} · ${escHtml(g.book)}</b></div><div class="goalbar"><span style="width:${pct}%"></span></div><div class="goalmeta">현재 ${r}회독 ${u}단원 · 목표 ${target}회독 · ${pct}%</div></div>`;
+     const total=Math.max(1,Number(g.units)||1),target=Math.max(1,Number(g.rounds)||1),r=Math.max(1,Number(g.currentRound)||1),u=Math.max(0,Math.min(total,Number(g.currentUnit)||0)),done=Math.min(target*total,Math.max(0,(r-1)*total+u)),pct=Math.round(done/(target*total)*100),unitLabel=g.currentChapterName||g.currentUnitText||(u?`${u}단원`:'시작 전');
+     return `<div class="sf-list-row goalrow" data-goal-key="${escHtml(k)}" style="--goal-color:${g.color||palette[g.subject]||'#7183b5'}"><div class="goalhead"><b>${escHtml(g.subject)} · ${escHtml(g.book)}</b></div><div class="goalbar"><span style="width:${pct}%"></span></div><div class="goalmeta">현재 ${r}회독 · ${escHtml(unitLabel)} · 목표 ${target}회독 · ${pct}%</div></div>`;
    }).join('')||'<div class="empty">＋ 버튼으로 회독 목표를 추가해 주세요.</div>';
    bindTouchList(list,'.sf-list-row',{tap:r=>openGoal(r.dataset.goalKey),remove:r=>{delete data.goals[r.dataset.goalKey];save();render()},reorder:keys=>{const rest=Object.keys(data.goals).filter(k=>!keys.includes(k));data.goals=Object.fromEntries([...keys,...rest].map(k=>[k,data.goals[k]]));save();renderGoalList()}});
    moreButton('goalList','goalList',goalExpanded,()=>goalExpanded,v=>goalExpanded=v,renderGoalList);
@@ -1217,7 +1217,7 @@ if(typeof openDay==='function'){
    const old=selectedForTask(data.tasks.find(t=>t.id===editing)||{});
    const chosen=new Set(old);
    wrap.innerHTML=chapters.map((c,i)=>{const k=unitKey(c,i);return `<label class="chapter-check"><input type="checkbox" value="${esc(k)}" ${chosen.has(k)?'checked':''}><span>${esc(c.name)}</span><small>${c.startPage||'?'}~${c.endPage||'?'}쪽</small></label>`}).join('');
-   const update=()=>{const vals=[...wrap.querySelectorAll('input:checked')].map(x=>x.value);$('range').value=vals.map(k=>{let c=chapters.find((x,i)=>unitKey(x,i)===k);return c?`${c.name} (${c.startPage||'?'}~${c.endPage||'?'}쪽)`:''}).filter(Boolean).join(', ')};
+   const update=()=>{const vals=[...wrap.querySelectorAll('input:checked')].map(x=>x.value);$('range').value=vals.map(k=>{let c=chapters.find((x,i)=>unitKey(x,i)===k);return c?c.name:''}).filter(Boolean).join(', ')};
    wrap.querySelectorAll('input').forEach(x=>x.addEventListener('change',update));
  }
  $('subject')?.addEventListener('change',renderScheduleToc);
@@ -1236,7 +1236,7 @@ if(typeof openDay==='function'){
    const old=editing?data.tasks.find(t=>t.id===editing):null;
    if(typeof originalSaveTask==='function')originalSaveTask.call(this);
    const latest=editing?data.tasks.find(t=>t.id===editing):data.tasks[data.tasks.length-1];
-   if(latest){latest.chapterKeys=selected;latest.bookKey=keyOf(sub,book);save();syncGoalProgress();render();}
+   if(latest){latest.chapterKeys=selected;latest.bookKey=keyOf(sub,book);latest.showPages=$('showPages')?.checked!==false;save();syncGoalProgress();render();}
  };
  // Compute goal completion from completed scheduled chapter records, deduplicated by chapter per round.
  function syncGoalProgress(){
@@ -1293,4 +1293,50 @@ if(typeof openDay==='function'){
 })();
 </script>
 
+
+<script>
+/* Final consistency layer: keep books, goals and schedules live-linked. */
+(function(){
+ const $=id=>document.getElementById(id);
+ const key=(s,b)=>s+'::'+(b||'');
+ const toc=(s,b)=>data.bookDetails?.[key(s,b)]?.chapters||[];
+ const chapterKey=(c,i)=>String(c.id??(c.name+'|'+(c.startPage||'')+'|'+(c.endPage||'')));
+ function syncLinkedGoals(){
+   const today=iso(new Date());
+   Object.entries(data.goals||{}).forEach(([k,g])=>{
+     const chapters=toc(g.subject,g.book); if(!chapters.length)return;
+     const selected=new Set((g.selectedChapters?.length?g.selectedChapters:chapters.map((_,i)=>String(i))).map(String));
+     const selectedRows=chapters.map((c,i)=>({c,i,k:chapterKey(c,i)})).filter(x=>selected.has(String(x.i))||selected.has(x.k));
+     const total=Math.max(1,selectedRows.length),target=Math.max(1,Number(g.rounds)||1);
+     const linked=data.tasks.filter(t=>key(t.subject,t.book)===k).sort((a,b)=>a.end.localeCompare(b.end)||a.start.localeCompare(b.start));
+     let round=Math.max(1,Number(g.startRound)||1),roundDone=new Set(),lastName='시작 전',roundsFinished=0;
+     linked.forEach(t=>{
+       const allDatesDone=Array.isArray(t.doneDates)&&t.doneDates.length>=Math.max(1,Number(t.duration)||1);
+       const completed=!!t.done||t.end<today||allDatesDone;
+       if(!completed)return;
+       (t.chapterKeys||[]).forEach(ck=>{
+         const row=selectedRows.find(x=>x.k===ck); if(!row)return;
+         roundDone.add(ck);lastName=row.c.name;
+         if(roundDone.size>=total){roundsFinished++;roundDone=new Set();}
+       });
+     });
+     const currentRound=Math.min(target,round+roundsFinished);
+     g.units=total;g.currentRound=currentRound;g.currentUnit=roundDone.size;
+     g.completedChapterKeys=[...roundDone];
+     if(roundDone.size)g.currentChapterName=lastName;
+     else if(roundsFinished)g.currentChapterName='한 회독 완료';
+     else g.currentChapterName=g.currentUnitText||'시작 전';
+   });
+ }
+
+ const priorRender=window.render;
+ if(typeof priorRender==='function')window.render=function(){syncLinkedGoals();priorRender();};
+ // Refresh all visible panels immediately after goal deletion, including touch-list removal.
+ document.addEventListener('click',e=>{if(e.target.closest('[data-goal-key]')||e.target.closest('#deleteGoalBtn'))setTimeout(()=>{syncLinkedGoals();window.render?.();},0)});
+ // Keep the page-display option in sync when reusing an archived schedule.
+ const reuseButtons=document.querySelectorAll('[data-reuse]');
+ reuseButtons.forEach(b=>b.addEventListener('click',()=>setTimeout(()=>{if($('showPages'))$('showPages').checked=true;},0)));
+ syncLinkedGoals();
+})();
+</script>
 </body></html>
